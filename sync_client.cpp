@@ -10,6 +10,7 @@ SyncClient::SyncClient()
 
 int SyncClient::start()
 {
+	return 0;
 }
 
 }

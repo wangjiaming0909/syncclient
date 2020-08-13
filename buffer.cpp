@@ -1,6 +1,7 @@
 #include "buffer.h"
 #include <exception>
 #include <utility>
+#include <cstdint>
 
 using namespace reactor;
 
@@ -592,7 +593,7 @@ int64_t buffer::append_printf(const char* fmt, ...)
 
         if(vs < 0) return vs;//vsnprintf return error
 
-        if(buffer_chain::MAXIMUM_CHAIN_SIZE < static_cast<u_int32_t>(vs))//fmt 字串太长
+        if(buffer_chain::MAXIMUM_CHAIN_SIZE < static_cast<uint32_t>(vs))//fmt 字串太长
         {
             LOG(WARNING) << "Too long for a chain, size: " << vs;
             return -1;
@@ -600,14 +601,14 @@ int64_t buffer::append_printf(const char* fmt, ...)
 
         if((uint32_t)vs < data_size)//data_size可以塞下fmt字串
         {
-            data_chain->off_ += static_cast<u_int32_t>(vs);
-            total_len_ += static_cast<u_int32_t>(vs);
+            data_chain->off_ += static_cast<uint32_t>(vs);
+            total_len_ += static_cast<uint32_t>(vs);
             ret = vs;
             last_chain_with_data_ = data_chain;
             break;
         }
 
-        data_chain = expand_if_needed(static_cast<u_int32_t>(vs) + 1);
+        data_chain = expand_if_needed(static_cast<uint32_t>(vs) + 1);
         data_p = data_chain->buffer_ + data_chain->off_;
         data_size = data_chain->chain_free_space();
     }
