@@ -1,0 +1,58 @@
+
+syntax = "proto2";
+
+package filesync;
+
+
+enum PackageType {
+  Client = 0;
+  Server = 1;
+}
+
+enum Command
+{
+  ClientHello = 0;
+  ServerHello = 1;
+  DepositeFile = 2;
+  ReportState = 3;
+}
+
+enum HeaderContentType
+{
+  None = 0;
+  DepositeFileContent = 1;
+  DepositeStateContent = 2;
+}
+
+enum DepositeState
+{
+  Succeed = 0;
+  Failed = 1;
+  Paused = 2;
+}
+
+message Header
+{
+  required PackageType type = 1;
+  required Command command = 2;
+  required int32 headerContentLen = 3;
+  required HeaderContentType contentType = 4;
+  optional DepositeFileHeader depositeFileHeader = 5;
+  optional DepositeState depositeStateHeader = 6;
+}
+
+message DepositeFileHeader
+{
+  required string fileName = 1;
+  required int64 fileLen = 2;
+  required int64 curSeqStart = 3;
+  required int64 curSeqEnd = 4;
+}
+
+message SyncPackage
+{
+  required int64 len = 1;
+  required Header header = 2;
+  required int64 contentLen = 3;
+  required bytes content = 4;
+};

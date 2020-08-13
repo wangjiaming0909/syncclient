@@ -1,5 +1,4 @@
-#include <iostream>
-#include <uv.h>
+#include "sync_client.h"
 #include "easylogging++.h"
 
 INITIALIZE_EASYLOGGINGPP
@@ -26,8 +25,6 @@ void setupLogger()
 int main()
 {
   setupLogger();
-  cout << "Hello World!" << endl;
-  uv_loop_t *loop = uv_default_loop();
-  cout << loop->active_handles;
+  LOG(INFO) << "hello world!";
   return 0;
 }
