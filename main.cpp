@@ -25,6 +25,7 @@ void setupLogger()
 int main()
 {
   setupLogger();
-  LOG(INFO) << "hello world!";
-  return 0;
+  sync_client::SyncClient client;
+  client.init("127.0.0.1", 3306);
+  return client.start();
 }
