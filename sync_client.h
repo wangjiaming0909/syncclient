@@ -1,15 +1,19 @@
-#include <uv.h>
 #include <boost/noncopyable.hpp>
+#include <cstdint>
+#include "uv_client.h"
+
 namespace sync_client
 {
-
-class SyncClient : boost::noncopyable
+using namespace uv;
+class SyncClient : public UVClient
 {
 public:
   SyncClient();
 
-  int start();
+protected:
+  virtual void on_connect(uv_connect_t* req, int status) override;
 
+private:
 };
 
 }
