@@ -545,32 +545,29 @@ int64_t buffer::append(const buffer_chain &chain)//TODO copy too much
 
 int64_t buffer::append(buffer_chain &&chain)
 {
-    if(last_chain_with_data_ != nullptr)
-    {
-        auto * last_chain = free_trailing_empty_chains();
-        chains_.push_back(std::move(chain));
-        last_chain->next_ = &chains_.back();
-    }
-    else
-    {
-        chains_.push_back(std::move(chain));
-    }
-    chains_.back().next_ = nullptr;
-    chains_.back().parent_ = this;
-    return chains_.back().size();//!!
+  if(last_chain_with_data_ != nullptr) {
+    auto * last_chain = free_trailing_empty_chains();
+    chains_.push_back(std::move(chain));
+    last_chain->next_ = &chains_.back();
+  } else {
+    chains_.push_back(std::move(chain));
+  }
+  chains_.back().next_ = nullptr;
+  chains_.back().parent_ = this;
+  return chains_.back().size();//!!
 }
 
 int64_t buffer::append(const void* data, uint64_t data_len)
 {
-    if(data == 0 || data_len == 0) return -1;
+  if(data == 0 || data_len == 0) return -1;
 
-    buffer_chain* data_chain = expand_if_needed(data_len);
-    if(data_chain->chain_free_space() < data_len) return -1;//for expand error
+  buffer_chain* data_chain = expand_if_needed(data_len);
+  if(data_chain->chain_free_space() < data_len) return -1;//for expand error
 
-    data_chain->append(data, data_len);
-    total_len_ += data_len;
-    last_chain_with_data_ = data_chain;
-    return data_len;
+  data_chain->append(data, data_len);
+  total_len_ += data_len;
+  last_chain_with_data_ = data_chain;
+  return data_len;
 }
 
 int64_t buffer::append_printf(const char* fmt, ...)
@@ -630,7 +627,7 @@ int buffer::prepend(const buffer& other, uint32_t data_len, Iter start)
     return 0;
 }
 
-unsigned char* buffer::pullup(int64_t size)
+char* buffer::pullup(int64_t size)
 {
     //如果size 比 total_len_ 大, 那么将不能保证第一个node可以达到size的大小,因此返回nullptr
     if(size == 0 || size > total_len_)
@@ -642,7 +639,7 @@ unsigned char* buffer::pullup(int64_t size)
     buffer_chain* first_chain = &chains_.front();
     //如果第一个chain的大小已经满足size了,那么直接返回
     if(first_chain->size() >= size)
-        return static_cast<unsigned char*>(first_chain->get_start_buffer());
+        return const_cast<char*>(static_cast<const char*>(first_chain->get_start_buffer()));
 
     //第一个chain不够
     int64_t remain_to_pullup = size - first_chain->size();
@@ -685,7 +682,7 @@ unsigned char* buffer::pullup(int64_t size)
     }
 
     last_chain_with_data_ = current_chain ? current_chain : first_chain;
-    return static_cast<unsigned char*>(first_chain->get_start_buffer());
+    return static_cast<char*>(first_chain->get_start_buffer());
 }
 
 int64_t buffer::remove(/*out*/void* data, uint32_t data_len)

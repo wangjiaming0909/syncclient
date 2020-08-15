@@ -206,7 +206,7 @@ public:
     //if size is greater than the number of bytes in the buffer, the function returns null
     //otherwise pullup returns the first byte in the buffer
     //* note that if the size is the same as first_chunk_length will do nothing
-    unsigned char* pullup(int64_t size);
+    char* pullup(int64_t size);
 
     //remove the first datalen bytes to the {data}
     //if total length is small than data_len, all data will be copied

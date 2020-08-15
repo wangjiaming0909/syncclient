@@ -26,6 +26,6 @@ int main()
 {
   setupLogger();
   sync_client::SyncClient client;
-  client.init("127.0.0.1", 3306);
+  client.init("127.0.0.1", 9090);
   return client.start();
 }
