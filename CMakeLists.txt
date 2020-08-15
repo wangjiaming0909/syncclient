@@ -39,4 +39,4 @@ ENDIF(NOT PROTOBUF_FOUND)
 MESSAGE(STATUS ${PROTOBUF_FOUND} " found")
 
 add_executable(syncclient main.cpp ${SOURCE})
-target_link_libraries(syncclient  uv libprotobuf)
+target_link_libraries(syncclient ${UV_FOUND} ${PROTOBUF_FOUND})
