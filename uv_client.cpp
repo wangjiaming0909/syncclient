@@ -98,6 +98,10 @@ int UVClient::start()
 int UVClient::do_write()
 {
   int ret = 0;
+  if (uv_is_closing((const uv_handle_t*)tcp_)) {
+    LOG(WARNING) << "UVClient detects server is closing";
+    return -1;
+  }
   if (init_write_req() > 0) {
     if ((ret = uv_write(write_req_, (uv_stream_t*)tcp_, &write_buf_, 1, after_write_cb))) {
       uv_close((uv_handle_t*)tcp_, close_cb);

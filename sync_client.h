@@ -5,12 +5,14 @@
 #include "decoder.h"
 #include "sync_package.h"
 
+
 namespace sync_client
 {
 using namespace uv;
 using namespace filesync;
 class SyncClient : public UVClient
 {
+static uint64_t DEFAULT_TIMER_INTERVAL;
 public:
   SyncClient();
   ~SyncClient();
@@ -28,6 +30,8 @@ private:
   reactor::Decoder<filesync::SyncPackage, int64_t> decoder_;
   char* client_hello_package_ = nullptr;
   size_t client_hello_package_size_ = 0;
+  uint64_t timer_interval_;
+  bool is_ping_failed_ = false;
 };
 
 }

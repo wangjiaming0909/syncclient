@@ -8,10 +8,12 @@
 
 namespace sync_client
 {
+uint64_t SyncClient::DEFAULT_TIMER_INTERVAL = 200;
 
 SyncClient::SyncClient()
   : UVClient()
 {
+  timer_interval_ = DEFAULT_TIMER_INTERVAL;
 }
 SyncClient::~SyncClient()
 {
@@ -22,7 +24,7 @@ SyncClient::~SyncClient()
 int SyncClient::do_on_connect(uv_connect_t* req, int status)
 {
   LOG(DEBUG) << "SyncClient do_on_connect";
-  return start_timer(2000, 2000);
+  return start_timer(timer_interval_, timer_interval_);
 }
 
 int SyncClient::ping()
@@ -35,8 +37,7 @@ int SyncClient::ping()
   }
   //TODO size type long?
   write(client_hello_package_size_, false);
-  write(client_hello_package_, client_hello_package_size_, true);
-  return client_hello_package_size_;
+  return write(client_hello_package_, client_hello_package_size_, true);
 }
 
 int SyncClient::do_after_write(uv_write_t* req, int status)
@@ -83,6 +84,18 @@ int SyncClient::do_on_read(uv_stream_t* stream, ssize_t size, const uv_buf_t* bu
 int SyncClient::do_on_timeout(uv_timer_t* handle)
 {
   LOG(DEBUG) << "SyncClient do_on_timeout";
-  return ping();
+  auto ret = ping();
+  if (ret < 0) {
+    LOG(WARNING) << "ping server failed";
+    is_ping_failed_ = true;
+    timer_interval_ *= 2;
+    start_timer(timer_interval_, timer_interval_);
+  }
+  if (ret >= 0 && is_ping_failed_) {
+    is_ping_failed_ = false;
+    timer_interval_ = DEFAULT_TIMER_INTERVAL;
+    start_timer(timer_interval_, timer_interval_);
+  }
+  return ret;
 }
 }
