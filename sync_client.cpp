@@ -4,7 +4,6 @@
 #include <cstdlib>
 #include <functional>
 #include "sync_mess.pb.h"
-#include "sync_package.h"
 
 
 namespace sync_client
@@ -14,27 +13,35 @@ SyncClient::SyncClient()
   : UVClient()
 {
 }
+SyncClient::~SyncClient()
+{
+  delete client_hello_package_;
+  client_hello_package_ = nullptr;
+}
 
 int SyncClient::do_on_connect(uv_connect_t* req, int status)
 {
-  ping();
+  LOG(DEBUG) << "SyncClient do_on_connect";
+  return start_timer(2000, 2000);
 }
 
 int SyncClient::ping()
 {
-  auto p = filesync::getHelloPackage("hello", filesync::PackageType::Client);
-  auto size = p->ByteSizeLong();
-  char* d = (char*)::calloc(size, 1);
-  p->SerializeToArray(d, size);
+  if (!client_hello_package_) {
+    auto p = filesync::getHelloPackage("hello", filesync::PackageType::Client);
+    client_hello_package_size_ = p->ByteSizeLong();
+    client_hello_package_ = (char*)::calloc(client_hello_package_size_, 1);
+    p->SerializeToArray(client_hello_package_, client_hello_package_size_);
+  }
   //TODO size type long?
-  write(size, false);
-  write(d, size, true);
-  free(d);
-  return size;
+  write(client_hello_package_size_, false);
+  write(client_hello_package_, client_hello_package_size_, true);
+  return client_hello_package_size_;
 }
 
 int SyncClient::do_after_write(uv_write_t* req, int status)
 {
+  return 0;
 }
 
 size_t SyncClient::do_init_write_req()
@@ -71,5 +78,11 @@ int SyncClient::do_on_read(uv_stream_t* stream, ssize_t size, const uv_buf_t* bu
     decoder_.reset();
   }
   return 0;
+}
+
+int SyncClient::do_on_timeout(uv_timer_t* handle)
+{
+  LOG(DEBUG) << "SyncClient do_on_timeout";
+  return ping();
 }
 }

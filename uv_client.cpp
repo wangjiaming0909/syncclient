@@ -41,6 +41,14 @@ void read_cb(uv_stream_t* stream, ssize_t size, const uv_buf_t* buf)
   client->on_read(stream, size, buf);
 }
 
+void timer_cb(uv_timer_t* handle)
+{
+  auto*client = (UVClient*)handle->data;
+  if (client) {
+    client->on_timeout(handle);
+  }
+}
+
 UVClient::UVClient()
 {
   memset(&server_addr_, 0, sizeof(struct sockaddr_in));
@@ -62,12 +70,16 @@ int UVClient::init(const char* server_addr, int port)
     return -1;
   }
   tcp_ = new uv_tcp_t();
-  if (uv_tcp_init(uv_default_loop(), tcp_)) {
+  if (uv_tcp_init(get_loop(), tcp_)) {
     LOG(ERROR) << "tcp init error: " << strerror(errno);
     return -1;
   }
   tcp_->data = this;
   connect_req_ = new uv_connect_t();
+
+  timer_ = new uv_timer_t();
+  timer_->data = this;
+  uv_timer_init(get_loop(), timer_);
   return 0;
 }
 
@@ -78,7 +90,7 @@ int UVClient::start()
   }
   int ret = 0;
   do{
-    ret = uv_run(uv_default_loop(), UV_RUN_DEFAULT);
+    ret = uv_run(get_loop(), UV_RUN_DEFAULT);
   }while(ret == 0);
   return ret;
 }
@@ -96,6 +108,7 @@ int UVClient::do_write()
 
 int UVClient::write(const char* d, size_t size, bool flush)
 {
+  LOG(DEBUG) << "UVClient write";
   auto ret = my_write_buf_.append((const void*)d, size);
   if ( ret < 0) {
     LOG(ERROR) << "UVClient::write error";
@@ -105,6 +118,23 @@ int UVClient::write(const char* d, size_t size, bool flush)
     return do_write();
   else
     return ret;
+}
+
+int UVClient::start_timer(uint64_t timeout, uint64_t repeat)
+{
+  LOG(DEBUG) << "UVClient start_timer";
+  if (timer_) {
+    return uv_timer_start(timer_, timer_cb, timeout, repeat);
+  }
+  return -1;
+}
+
+int UVClient::stop_timer()
+{
+  LOG(DEBUG) << "UVClient stop_timer";
+  if (timer_)
+    return uv_timer_stop(timer_);
+  return -1;
 }
 
 size_t UVClient::init_write_req()
@@ -121,6 +151,7 @@ size_t UVClient::init_write_req()
 
 int UVClient::on_connect(uv_connect_t* req, int status)
 {
+  LOG(DEBUG) << "UVClient on_connect";
   if (status < 0) {
     LOG(ERROR) << "connect error: " << strerror(-status);
     uv_close((uv_handle_t*)tcp_, close_cb);
@@ -138,11 +169,13 @@ int UVClient::after_write(uv_write_t* req, int status)
 
 int UVClient::on_close(uv_handle_t* handle)
 {
+  LOG(DEBUG) << "UVClient on_close";
   return do_on_close(handle);
 }
 
 int UVClient::on_read(uv_stream_t* stream, ssize_t size, const uv_buf_t* buf)
 {
+  LOG(DEBUG) << "UVClient on_read";
   if (size < 0) {
     LOG(INFO) << "got EOF";
     free(buf->base);
@@ -154,5 +187,11 @@ int UVClient::on_read(uv_stream_t* stream, ssize_t size, const uv_buf_t* buf)
     return -1;
   }
   return 0;
+}
+
+int UVClient::on_timeout(uv_timer_t* handle)
+{
+  LOG(DEBUG) << "UVClient on_timeout";
+  return do_on_timeout(handle);
 }
 }

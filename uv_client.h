@@ -10,6 +10,7 @@ void after_write_cb(uv_write_t* req, int status);
 void close_cb(uv_handle_t* handle);
 void read_alloc_cb(uv_handle_t* handle, size_t size, uv_buf_t* buf);
 void read_cb(uv_stream_t* stream, ssize_t size, const uv_buf_t* buf);
+void timer_cb(uv_timer_t* handle);
 
 class UVClient : boost::noncopyable
 {
@@ -19,6 +20,7 @@ public:
   friend void close_cb(uv_handle_t* handle);
   friend void read_alloc_cb(uv_handle_t* handle, size_t size, uv_buf_t* buf);
   friend void read_cb(uv_stream_t* stream, ssize_t size, const uv_buf_t* buf);
+  friend void timer_cb(uv_timer_t* handle);
   UVClient();
   ~UVClient();
   int init(const char*server_addr, int port);
@@ -36,12 +38,17 @@ public:
     return ret;
   }
 
+  uv_loop_t* get_loop() { return uv_default_loop();}
+  int start_timer(uint64_t timeout, uint64_t repeat);
+  int stop_timer();
+
 protected:
   int on_connect(uv_connect_t* req, int status);
   int after_write(uv_write_t* req, int status);
   int on_close(uv_handle_t* handle);
   int read_alloc(uv_handle_t* handle, size_t size, uv_buf_t* buf);
   int on_read(uv_stream_t* stream, ssize_t size, const uv_buf_t* buf);
+  int on_timeout(uv_timer_t* handle);
 
   //return how many bytes initialized
   //if return 0 means that no data to write
@@ -53,12 +60,14 @@ protected:
   virtual int do_after_write(uv_write_t* req, int status) = 0;
   virtual int do_on_close(uv_handle_t* handle) = 0;
   virtual int do_on_read(uv_stream_t* stream, ssize_t size, const uv_buf_t* buf) = 0;
+  virtual int do_on_timeout(uv_timer_t* handle) = 0;
 
 protected:
   uv_tcp_t* tcp_;
   uv_connect_t* connect_req_;
   uv_write_t* write_req_;
   uv_buf_t write_buf_;
+  uv_timer_t* timer_;
   reactor::buffer my_write_buf_;
   reactor::buffer my_read_buf_;
   struct sockaddr_in server_addr_;
