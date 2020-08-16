@@ -144,6 +144,7 @@ size_t UVClient::init_write_req()
   do_init_write_req();
   if (my_write_buf_.total_len() > 0) {
     auto p = my_write_buf_.pullup(my_write_buf_.total_len() > 4096 ? 4096 : my_write_buf_.total_len());
+    //LOG(DEBUG) << "init_write_req len: " << my_write_buf_.first_chain_length();
     write_buf_ = uv_buf_init(p, my_write_buf_.first_chain_length());
   }
   return write_buf_.len;
@@ -164,7 +165,12 @@ int UVClient::on_connect(uv_connect_t* req, int status)
 
 int UVClient::after_write(uv_write_t* req, int status)
 {
-  return do_after_write(req, status);
+  my_write_buf_.drain(write_buf_.len);
+  do_after_write(req, status);
+  if (my_write_buf_.total_len() > 0) {
+    do_write();
+  }
+  return 0;
 }
 
 int UVClient::on_close(uv_handle_t* handle)
