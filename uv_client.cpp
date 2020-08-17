@@ -49,6 +49,12 @@ void timer_cb(uv_timer_t* handle)
   }
 }
 
+void prepare_cb(uv_prepare_t* handle)
+{
+  auto *client = (UVClient*)handle->data;
+  client->on_prepare(handle);
+}
+
 UVClient::UVClient()
 {
   memset(&server_addr_, 0, sizeof(struct sockaddr_in));
@@ -59,6 +65,13 @@ UVClient::~UVClient()
   tcp_ = nullptr;
   delete connect_req_;
   connect_req_ = nullptr;
+  delete timer_;
+  timer_ = nullptr;
+  delete write_req_;
+  write_req_ = nullptr;
+  delete reconnect_timer_;
+  reconnect_timer_ = nullptr;
+
 }
 
 int UVClient::init(const char* server_addr, int port)
@@ -70,11 +83,6 @@ int UVClient::init(const char* server_addr, int port)
     return -1;
   }
   tcp_ = new uv_tcp_t();
-  if (uv_tcp_init(get_loop(), tcp_)) {
-    LOG(ERROR) << "tcp init error: " << strerror(errno);
-    return -1;
-  }
-  tcp_->data = this;
   connect_req_ = new uv_connect_t();
 
   timer_ = new uv_timer_t();
@@ -85,14 +93,8 @@ int UVClient::init(const char* server_addr, int port)
 
 int UVClient::start()
 {
-  if (uv_tcp_connect(connect_req_, tcp_, (const struct sockaddr*)&server_addr_, connect_cb)) {
-    LOG(ERROR) << "connect error: " << strerror(errno) << " addr: " << server_addr_str_ << " port: " << server_port_;
-  }
-  int ret = 0;
-  do{
-    ret = uv_run(get_loop(), UV_RUN_DEFAULT);
-  }while(ret == 0);
-  return ret;
+  if (connect_tcp() != 0) return -1;
+  return uv_run(get_loop(), UV_RUN_DEFAULT);
 }
 
 int UVClient::do_write()
@@ -104,7 +106,7 @@ int UVClient::do_write()
   }
   if (init_write_req() > 0) {
     if ((ret = uv_write(write_req_, (uv_stream_t*)tcp_, &write_buf_, 1, after_write_cb))) {
-      uv_close((uv_handle_t*)tcp_, close_cb);
+      close_tcp();
     }
   }
   return ret;
@@ -113,10 +115,14 @@ int UVClient::do_write()
 int UVClient::write(const char* d, size_t size, bool flush)
 {
   LOG(DEBUG) << "UVClient write";
+  if (is_closed_) {
+    LOG(ERROR) << "can't write now tcp is closed...";
+    return -1;
+  }
   auto ret = my_write_buf_.append((const void*)d, size);
   if ( ret < 0) {
     LOG(ERROR) << "UVClient::write error";
-    return 0;
+    return -1;
   }
   if (flush)
     return do_write();
@@ -124,9 +130,53 @@ int UVClient::write(const char* d, size_t size, bool flush)
     return ret;
 }
 
+void UVClient::close_tcp()
+{
+  uv_close((uv_handle_t*)tcp_, close_cb);
+}
+
+int UVClient::connect_tcp()
+{
+  if (!tcp_) {
+    tcp_ = new uv_tcp_t();
+  } else {
+    memset(tcp_, 0, sizeof(uv_tcp_t));
+  }
+  if (uv_tcp_init(get_loop(), tcp_)) {
+    LOG(ERROR) << "tcp init error: " << strerror(errno);
+    return -1;
+  }
+  tcp_->data = this;
+  if (uv_tcp_connect(connect_req_, tcp_, (const struct sockaddr*)&server_addr_, connect_cb)) {
+    LOG(ERROR) << "connect error: " << strerror(errno) << " addr: " << server_addr_str_ << " port: " << server_port_;
+    return -1;
+  }
+  return 0;
+}
+
+int UVClient::start_reconnect_timer()
+{
+  if (!reconnect_timer_) {
+    reconnect_timer_ = new uv_timer_t();
+    uv_timer_init(get_loop(), reconnect_timer_);
+    reconnect_timer_->data = this;
+  }
+  return uv_timer_start(reconnect_timer_, timer_cb, reconnect_fail_wait_, reconnect_fail_wait_);
+}
+
+void UVClient::wakeup_first_timer()
+{
+  if (timer_) start_timer(0, 0);
+}
+
+void UVClient::close_loop()
+{
+  uv_stop(get_loop());
+}
+
 int UVClient::start_timer(uint64_t timeout, uint64_t repeat)
 {
-  LOG(DEBUG) << "UVClient start_timer";
+  LOG(DEBUG) << "UVClient start_timer timeout: " << timeout << " repeat: " << repeat;
   if (timer_) {
     return uv_timer_start(timer_, timer_cb, timeout, repeat);
   }
@@ -159,8 +209,14 @@ int UVClient::on_connect(uv_connect_t* req, int status)
   LOG(DEBUG) << "UVClient on_connect";
   if (status < 0) {
     LOG(ERROR) << "connect error: " << strerror(-status);
-    uv_close((uv_handle_t*)tcp_, close_cb);
+    close_tcp();
     return -1;
+  }
+  //connect succeed
+  if (is_should_reconnect_ && is_closed_) {
+    is_closed_ = false;
+    current_reconnect_retry_time_ = 0;
+    wakeup_first_timer();
   }
   LOG(DEBUG) << "on connect in syncclient status: " << status;
   uv_read_start((uv_stream_t*)req->handle, read_alloc_cb, read_cb);
@@ -180,6 +236,16 @@ int UVClient::after_write(uv_write_t* req, int status)
 int UVClient::on_close(uv_handle_t* handle)
 {
   LOG(DEBUG) << "UVClient on_close";
+  is_closed_ = true;
+  if (is_should_reconnect_ && current_reconnect_retry_time_ < reconnect_retry_times_) {
+    if (start_reconnect_timer()) {
+      LOG(ERROR) << "on close start reconnect timer failed";
+      close_loop();
+    }
+  } else if (is_should_reconnect_) {
+    LOG(ERROR) << "reconnect failed too many times closing loop";
+    close_loop();
+  }
   return do_on_close(handle);
 }
 
@@ -189,11 +255,11 @@ int UVClient::on_read(uv_stream_t* stream, ssize_t size, const uv_buf_t* buf)
   if (size < 0) {
     LOG(INFO) << "got EOF";
     free(buf->base);
-    uv_close((uv_handle_t*)tcp_, close_cb);
+    close_tcp();
     return -1;
   }
   if (do_on_read(stream, size, buf) < 0) {
-    uv_close((uv_handle_t*)tcp_, close_cb);
+    close_tcp();
     return -1;
   }
   return 0;
@@ -202,6 +268,26 @@ int UVClient::on_read(uv_stream_t* stream, ssize_t size, const uv_buf_t* buf)
 int UVClient::on_timeout(uv_timer_t* handle)
 {
   LOG(DEBUG) << "UVClient on_timeout";
-  return do_on_timeout(handle);
+  //first timer to provide call back for sub classes
+  if (handle == timer_)
+    return do_on_timeout(handle);
+
+  //base self timers
+  if (handle == reconnect_timer_) {
+    current_reconnect_retry_time_++;
+    if (connect_tcp() != 0) {
+      LOG(ERROR) << "on timeout reconnect tcp failed";
+      close_loop();
+      return -1;
+    }
+    uv_timer_stop(reconnect_timer_);
+  }
+  return 0;
+}
+
+int UVClient::on_prepare(uv_prepare_t* handle)
+{
+  int ret = 0;
+  return ret;
 }
 }

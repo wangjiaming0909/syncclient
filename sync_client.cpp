@@ -1,19 +1,18 @@
 #include "sync_client.h"
 #include "buffer.h"
 #include "easylogging++.h"
-#include <cstdlib>
-#include <functional>
 #include "sync_mess.pb.h"
 
 
 namespace sync_client
 {
-uint64_t SyncClient::DEFAULT_TIMER_INTERVAL = 200;
+uint64_t SyncClient::DEFAULT_TIMER_INTERVAL = 500;
 
 SyncClient::SyncClient()
   : UVClient()
 {
   timer_interval_ = DEFAULT_TIMER_INTERVAL;
+  is_should_reconnect_ = true;
 }
 SyncClient::~SyncClient()
 {
@@ -24,6 +23,7 @@ SyncClient::~SyncClient()
 int SyncClient::do_on_connect(uv_connect_t* req, int status)
 {
   LOG(DEBUG) << "SyncClient do_on_connect";
+  if (is_ping_failed_) return 0;
   return start_timer(timer_interval_, timer_interval_);
 }
 
@@ -36,8 +36,9 @@ int SyncClient::ping()
     p->SerializeToArray(client_hello_package_, client_hello_package_size_);
   }
   //TODO size type long?
-  write(client_hello_package_size_, false);
-  return write(client_hello_package_, client_hello_package_size_, true);
+  if (write(client_hello_package_size_, false) > 0)
+    return write(client_hello_package_, client_hello_package_size_, true);
+  return -1;
 }
 
 int SyncClient::do_after_write(uv_write_t* req, int status)
@@ -91,7 +92,7 @@ int SyncClient::do_on_timeout(uv_timer_t* handle)
     timer_interval_ *= 2;
     start_timer(timer_interval_, timer_interval_);
   }
-  if (ret >= 0 && is_ping_failed_) {
+  if (ret == 0 && is_ping_failed_) {
     is_ping_failed_ = false;
     timer_interval_ = DEFAULT_TIMER_INTERVAL;
     start_timer(timer_interval_, timer_interval_);
