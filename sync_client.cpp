@@ -6,7 +6,7 @@
 
 namespace sync_client
 {
-uint64_t SyncClient::DEFAULT_TIMER_INTERVAL = 500;
+uint64_t SyncClient::DEFAULT_TIMER_INTERVAL = 2000;
 
 SyncClient::SyncClient()
   : UVClient()
@@ -98,5 +98,11 @@ int SyncClient::do_on_timeout(uv_timer_t* handle)
     start_timer(timer_interval_, timer_interval_);
   }
   return ret;
+}
+
+int SyncClient::do_on_fs_event(uv_fs_event_t* handle, const char* filename, int events, int status)
+{
+  LOG(DEBUG) << "do on fs event filename: " << filename << " events: " << events << " status: " << status;
+  return 0;
 }
 }

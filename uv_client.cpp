@@ -55,6 +55,12 @@ void prepare_cb(uv_prepare_t* handle)
   client->on_prepare(handle);
 }
 
+void fs_event_cb(uv_fs_event_t* handle, const char* filename, int events, int status)
+{
+  auto* client = (UVClient*)handle->data;
+  client->on_fs_event(handle, filename, events, status);
+}
+
 UVClient::UVClient()
 {
   memset(&server_addr_, 0, sizeof(struct sockaddr_in));
@@ -71,7 +77,10 @@ UVClient::~UVClient()
   write_req_ = nullptr;
   delete reconnect_timer_;
   reconnect_timer_ = nullptr;
-
+  for(auto& pair : fs_monitoring_map_) {
+    delete pair.second;
+    pair.second = nullptr;
+  }
 }
 
 int UVClient::init(const char* server_addr, int port)
@@ -204,6 +213,34 @@ size_t UVClient::init_write_req()
   return write_buf_.len;
 }
 
+int UVClient::start_fs_monitoring(const std::string& path_or_file)
+{
+  if (fs_monitoring_map_.count(path_or_file)) {
+    LOG(WARNING) << "already monitoring file: " << path_or_file;
+    return -1;
+  }
+  auto* fs_event = new uv_fs_event_t();
+  uv_fs_event_init(get_loop(), fs_event);
+  fs_event->data = this;
+  if (uv_fs_event_start(fs_event, fs_event_cb, path_or_file.c_str(), UV_FS_EVENT_RECURSIVE) != 0) {
+    delete fs_event;
+    fs_event = nullptr;
+    return -1;
+  }
+  fs_monitoring_map_[path_or_file] = fs_event;
+  return 0;
+}
+
+void UVClient::stop_fs_monitoring(const std::string& path_or_file)
+{
+  if (fs_monitoring_map_.count(path_or_file)) {
+    auto* handle = fs_monitoring_map_[path_or_file];
+    uv_fs_event_stop(handle);
+    delete handle;
+    fs_monitoring_map_.erase(path_or_file);
+  }
+}
+
 int UVClient::on_connect(uv_connect_t* req, int status)
 {
   LOG(DEBUG) << "UVClient on_connect";
@@ -289,5 +326,10 @@ int UVClient::on_prepare(uv_prepare_t* handle)
 {
   int ret = 0;
   return ret;
+}
+
+int UVClient::on_fs_event(uv_fs_event_t* handle, const char* filename, int events, int status)
+{
+  return do_on_fs_event(handle, filename, events, status);
 }
 }

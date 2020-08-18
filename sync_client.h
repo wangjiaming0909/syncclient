@@ -25,6 +25,7 @@ protected:
   virtual int do_on_close(uv_handle_t* handle) override;
   virtual int do_on_read(uv_stream_t* stream, ssize_t size, const uv_buf_t* buf) override;
   virtual int do_on_timeout(uv_timer_t* handle) override;
+  virtual int do_on_fs_event(uv_fs_event_t* handle, const char* filename, int events, int status) override;
 
 private:
   reactor::Decoder<filesync::SyncPackage, int64_t> decoder_;
