@@ -104,7 +104,7 @@ public:
 
   void reset()
   {
-    LOG(DEBUG) << "Reset decoder...";
+    //LOG(DEBUG) << "Reset decoder...";
     mesPtr_.reset();
     bytesParsed_ = 0;
     bytesRemainToParse_ = 0;
@@ -124,7 +124,7 @@ private:
       messLen_ = 0;
       return 0;
     }
-    LOG(DEBUG) << "Decoding len: " << messLen_;
+    //LOG(DEBUG) << "Decoding len: " << messLen_;
     buf.drain(sizeof(Len_T));
     bytesParsed_ += sizeof(Len_T);
     bytesRemainToParse_ = messLen_;
@@ -147,11 +147,11 @@ private:
       reset();
       return 0;
     }
-    LOG(DEBUG) << "Decode remain mess: " << messLen_;
+    //LOG(DEBUG) << "Decode remain mess: " << messLen_;
     bytesParsed_ += messLen_;
-    LOG(DEBUG) << "bytes parsed: " << bytesParsed_;
+    //LOG(DEBUG) << "bytes parsed: " << bytesParsed_;
     bytesRemainToParse_ -= messLen_;
-    LOG(DEBUG) << "bytes remain to parse: " << bytesRemainToParse_;
+    //LOG(DEBUG) << "bytes remain to parse: " << bytesRemainToParse_;
     buf.drain(messLen_);
     return messLen_;
   }

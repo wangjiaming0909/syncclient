@@ -123,7 +123,7 @@ int UVClient::do_write()
 
 int UVClient::write(const char* d, size_t size, bool flush)
 {
-  LOG(DEBUG) << "UVClient write";
+  //LOG(DEBUG) << "UVClient write";
   if (is_closed_) {
     LOG(ERROR) << "can't write now tcp is closed...";
     return -1;
@@ -185,7 +185,7 @@ void UVClient::close_loop()
 
 int UVClient::start_timer(uint64_t timeout, uint64_t repeat)
 {
-  LOG(DEBUG) << "UVClient start_timer timeout: " << timeout << " repeat: " << repeat;
+  //LOG(DEBUG) << "UVClient start_timer timeout: " << timeout << " repeat: " << repeat;
   if (timer_) {
     return uv_timer_start(timer_, timer_cb, timeout, repeat);
   }
@@ -194,7 +194,7 @@ int UVClient::start_timer(uint64_t timeout, uint64_t repeat)
 
 int UVClient::stop_timer()
 {
-  LOG(DEBUG) << "UVClient stop_timer";
+  //LOG(DEBUG) << "UVClient stop_timer";
   if (timer_)
     return uv_timer_stop(timer_);
   return -1;
@@ -243,7 +243,7 @@ void UVClient::stop_fs_monitoring(const std::string& path_or_file)
 
 int UVClient::on_connect(uv_connect_t* req, int status)
 {
-  LOG(DEBUG) << "UVClient on_connect";
+  //LOG(DEBUG) << "UVClient on_connect";
   if (status < 0) {
     LOG(ERROR) << "connect error: " << strerror(-status);
     close_tcp();
@@ -255,7 +255,7 @@ int UVClient::on_connect(uv_connect_t* req, int status)
     current_reconnect_retry_time_ = 0;
     wakeup_first_timer();
   }
-  LOG(DEBUG) << "on connect in syncclient status: " << status;
+  //LOG(DEBUG) << "on connect in syncclient status: " << status;
   uv_read_start((uv_stream_t*)req->handle, read_alloc_cb, read_cb);
   return do_on_connect(req, status);
 }
@@ -272,7 +272,7 @@ int UVClient::after_write(uv_write_t* req, int status)
 
 int UVClient::on_close(uv_handle_t* handle)
 {
-  LOG(DEBUG) << "UVClient on_close";
+  //LOG(DEBUG) << "UVClient on_close";
   is_closed_ = true;
   if (is_should_reconnect_ && current_reconnect_retry_time_ < reconnect_retry_times_) {
     if (start_reconnect_timer()) {
@@ -288,23 +288,20 @@ int UVClient::on_close(uv_handle_t* handle)
 
 int UVClient::on_read(uv_stream_t* stream, ssize_t size, const uv_buf_t* buf)
 {
-  LOG(DEBUG) << "UVClient on_read";
-  if (size < 0) {
-    LOG(INFO) << "got EOF";
-    free(buf->base);
+  //LOG(DEBUG) << "UVClient on_read";
+  int ret = 0;
+  if (size < 0 || do_on_read(stream, size, buf) < 0) {
+    LOG(INFO) << "got EOF or read error";
     close_tcp();
-    return -1;
+    ret = -1;
   }
-  if (do_on_read(stream, size, buf) < 0) {
-    close_tcp();
-    return -1;
-  }
-  return 0;
+  free(buf->base);
+  return ret;
 }
 
 int UVClient::on_timeout(uv_timer_t* handle)
 {
-  LOG(DEBUG) << "UVClient on_timeout";
+  //LOG(DEBUG) << "UVClient on_timeout";
   //first timer to provide call back for sub classes
   if (handle == timer_)
     return do_on_timeout(handle);

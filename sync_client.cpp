@@ -6,7 +6,7 @@
 
 namespace sync_client
 {
-uint64_t SyncClient::DEFAULT_TIMER_INTERVAL = 2000;
+uint64_t SyncClient::DEFAULT_TIMER_INTERVAL = 10000;
 
 SyncClient::SyncClient()
   : UVClient()
