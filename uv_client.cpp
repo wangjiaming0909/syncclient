@@ -56,6 +56,11 @@ void prepare_cb(uv_prepare_t* handle)
   client->on_prepare(handle);
 }
 
+void check_cb(uv_check_t* handle) {
+  auto* client = (UVClient*)handle->data;
+  client->on_check(handle);
+}
+
 void fs_event_cb(uv_fs_event_t* handle, const char* filename, int events, int status)
 {
   auto* client = (UVClient*)handle->data;
@@ -237,6 +242,29 @@ int UVClient::stop_timer(uv_timer_t* timer)
   return ret;
 }
 
+uv_check_t* UVClient::start_check(uv_check_t* check, std::function<int(uv_check_t*)> cb)
+{
+  if (check == nullptr) {
+    check = new uv_check_t();
+    uv_check_init(get_loop(), check);
+    check->data = this;
+    uv_check_start(check, check_cb);
+  }
+  auto p = check_cbs_.insert({check, cb});
+  p.first->second = cb;
+  return check;
+}
+int UVClient::stop_check(uv_check_t* check)
+{
+  auto it = check_cbs_.find(check);
+  if (it == check_cbs_.end()) {
+    LOG(DEBUG) << "can not stop nonexist check: " << check;
+    return -1;
+  }
+  delete it->first;
+  check_cbs_.erase(it);
+  return 0;
+}
 
 size_t UVClient::init_write_req()
 {
@@ -266,16 +294,26 @@ int UVClient::start_fs_monitoring(const std::string& path_or_file)
     return -1;
   }
   fs_monitoring_map_[path_or_file] = fs_event;
+  if (fs_event_check_ == nullptr) {
+    using namespace std::placeholders;
+    fs_event_check_ = start_check(nullptr, std::bind(&UVClient::fs_event_check_cb, this, _1));
+  }
   return 0;
 }
 
 void UVClient::stop_fs_monitoring(const std::string& path_or_file)
 {
-  if (fs_monitoring_map_.count(path_or_file)) {
-    auto* handle = fs_monitoring_map_[path_or_file];
+  auto it_monitoring = fs_monitoring_map_.find(path_or_file);
+  if (it_monitoring != fs_monitoring_map_.end()) {
+    auto* handle = it_monitoring->second;
     uv_fs_event_stop(handle);
+    auto it = fs_event_map_.find(handle);
+    if (it != fs_event_map_.end()) {
+      delete it->second;
+      fs_event_map_.erase(it);
+    }
     delete handle;
-    fs_monitoring_map_.erase(path_or_file);
+    fs_monitoring_map_.erase(it_monitoring);
   }
 }
 
@@ -364,13 +402,45 @@ int UVClient::on_prepare(uv_prepare_t* handle)
   return ret;
 }
 
+int UVClient::on_check(uv_check_t* handle)
+{
+  auto it = check_cbs_.find(handle);
+  if (it == check_cbs_.end()) {
+    LOG(WARNING) << "can not find the check handle: " << handle;
+    return -1;
+  }
+  return it->second(handle);
+}
+
 int UVClient::on_fs_event(uv_fs_event_t* handle, const char* filename, int events, int status)
 {
   auto it = fs_event_map_.find(handle);
+  auto t = uv_now(get_loop());
   //means this is the first time that this handle trigger a fs event
   if (it == fs_event_map_.end()) {
-
+    fs_event_info* fse_info= new fs_event_info{handle, filename, events, status, t};
+    fs_event_map_[handle] = fse_info;
+    fse_info->last_timeout = t;
+  } else { //not the first time
+    it->second->last_timeout = t;
   }
-  return do_on_fs_event(handle, filename, events, status);
+  return 0;
+}
+
+int UVClient::fs_event_check_cb(uv_check_t* check)
+{
+  (void)check;
+  auto now = uv_now(get_loop());
+  decltype(fs_event_map_) m;
+  for(auto& p : fs_event_map_) {
+    if (now - p.second->last_timeout > fs_event_trigger_gap_) {
+      m.insert(p);
+    }
+  }
+  for(auto& p : m) {
+    do_on_fs_event(p.first, p.second->filename, p.second->events, p.second->status);
+    p.second->last_timeout = now;
+  }
+  return 0;
 }
 }

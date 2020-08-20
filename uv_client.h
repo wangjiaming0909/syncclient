@@ -13,6 +13,7 @@ void read_alloc_cb(uv_handle_t* handle, size_t size, uv_buf_t* buf);
 void read_cb(uv_stream_t* stream, ssize_t size, const uv_buf_t* buf);
 void timer_cb(uv_timer_t* handle);
 void prepare_cb(uv_prepare_t* handle);
+void check_cb(uv_check_t* handle);
 void fs_event_cb(uv_fs_event_t* handle, const char* filename, int events, int status);
 
 class UVClient : boost::noncopyable
@@ -26,6 +27,7 @@ public:
   friend void timer_cb(uv_timer_t* handle);
   friend void prepare_cb(uv_prepare_t* handle);
   friend void fs_event_cb(uv_fs_event_t* handle, const char* filename, int events, int status);
+  friend void check_cb(uv_check_t* handle);
   UVClient();
   ~UVClient();
   int init(const char*server_addr, int port);
@@ -43,8 +45,10 @@ public:
 
   //if timer is nullptr, means schedule a new timer, otherwise reschedule the old timer [timer]
   //return the created timer or the timer passed in
-  uv_timer_t* start_timer(uv_timer_t* timer/*in out*/, uint64_t timeout, uint64_t repeat);
+  uv_timer_t* start_timer(uv_timer_t* timer, uint64_t timeout, uint64_t repeat);
   int stop_timer(uv_timer_t* timer);
+  uv_check_t* start_check(uv_check_t* check, std::function<int(uv_check_t*)> cb);
+  int stop_check(uv_check_t* check);
 
   inline void set_should_reconnect(bool v) { is_should_reconnect_ = v; }
   int start_fs_monitoring(const std::string& path_or_file);
@@ -59,11 +63,13 @@ protected:
   int on_read(uv_stream_t* stream, ssize_t size, const uv_buf_t* buf);
   int on_timeout(uv_timer_t* handle);
   int on_prepare(uv_prepare_t* handle);
+  int on_check(uv_check_t* handle);
   int on_fs_event(uv_fs_event_t* handle, const char* filename, int events, int status);
 
   //return how many bytes initialized
   //if return 0 means that no data to write
   size_t init_write_req();
+  int fs_event_check_cb(uv_check_t* check);
 
 protected:
   virtual size_t do_init_write_req() = 0;
@@ -110,7 +116,9 @@ protected:
   //if a file [filename] triggered a fs event twice at time1 and time2, if time2 - time1 < gap
   //UVClient will not call do_on_timeout at this file;
   uint32_t fs_event_trigger_gap_ = 500;//0.5s
+  uv_check_t* fs_event_check_ = nullptr;
   std::map<uv_fs_event_t*, fs_event_info*> fs_event_map_;
+  std::map<uv_check_t*, std::function<int (uv_check_t*)>> check_cbs_;
   static const int reconnect_fail_wait_ = 2000;//1 second
   static const int reconnect_retry_times_ = 5;
 };
