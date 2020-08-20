@@ -6,7 +6,7 @@
 
 namespace sync_client
 {
-uint64_t SyncClient::DEFAULT_TIMER_INTERVAL = 10000;
+uint64_t SyncClient::DEFAULT_TIMER_INTERVAL = 1000;
 
 SyncClient::SyncClient()
   : UVClient()
@@ -22,9 +22,11 @@ SyncClient::~SyncClient()
 
 int SyncClient::do_on_connect(uv_connect_t* req, int status)
 {
+  (void)req;
+  (void)status;
   LOG(DEBUG) << "SyncClient do_on_connect";
   if (is_ping_failed_) return 0;
-  return start_timer(timer_interval_, timer_interval_);
+  return start_ping_timer(timer_interval_, timer_interval_);
 }
 
 int SyncClient::ping()
@@ -43,6 +45,8 @@ int SyncClient::ping()
 
 int SyncClient::do_after_write(uv_write_t* req, int status)
 {
+  (void)req;
+  (void)status;
   return 0;
 }
 
@@ -53,11 +57,13 @@ size_t SyncClient::do_init_write_req()
 
 int SyncClient::do_on_close(uv_handle_t* handle)
 {
+  (void)handle;
   return 0;
 }
 
 int SyncClient::do_on_read(uv_stream_t* stream, ssize_t size, const uv_buf_t* buf)
 {
+  (void)stream;
   using namespace filesync;
   reactor::buffer mb;
   mb.append(buf->base, size);
@@ -84,24 +90,26 @@ int SyncClient::do_on_read(uv_stream_t* stream, ssize_t size, const uv_buf_t* bu
 
 int SyncClient::do_on_timeout(uv_timer_t* handle)
 {
-  LOG(DEBUG) << "SyncClient do_on_timeout";
+  (void)handle;
+  //LOG(DEBUG) << "SyncClient do_on_timeout";
   auto ret = ping();
   if (ret < 0) {
     LOG(WARNING) << "ping server failed";
     is_ping_failed_ = true;
     timer_interval_ *= 2;
-    start_timer(timer_interval_, timer_interval_);
+    start_ping_timer(timer_interval_, timer_interval_);
   }
   if (ret == 0 && is_ping_failed_) {
     is_ping_failed_ = false;
     timer_interval_ = DEFAULT_TIMER_INTERVAL;
-    start_timer(timer_interval_, timer_interval_);
+    start_ping_timer(timer_interval_, timer_interval_);
   }
   return ret;
 }
 
 int SyncClient::do_on_fs_event(uv_fs_event_t* handle, const char* filename, int events, int status)
 {
+  (void)handle;
   LOG(DEBUG) << "do on fs event filename: " << filename << " events: " << events << " status: " << status;
   return 0;
 }

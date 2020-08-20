@@ -43,7 +43,7 @@ public:
         case LEN_DECODED:
         case PARTIALY_PARSED:
           {
-            if (buf_len - bytesParsed < bytesRemainToParse_)
+            if ((Len_T)(buf_len - bytesParsed) < bytesRemainToParse_)
               return bytesParsed;
             bytesParsed += decodeRemain(buf);
             if(bytesRemainToParse_ == 0)
@@ -134,7 +134,7 @@ private:
   Len_T decodeRemain(buffer& buf)
   {
     auto buf_len = buf.total_len();
-    if (buf_len < bytesRemainToParse_) return 0;
+    if ((Len_T)buf_len < bytesRemainToParse_) return 0;
 
     assert(messLen_ == bytesRemainToParse_);
     auto* d = buf.pullup(messLen_);

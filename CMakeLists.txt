@@ -10,7 +10,7 @@ SET(SYNC_MESS_H ${PROJECT_SOURCE_DIR}/sync_mess.pb.h)
 SET(SYNC_MESS_SOURCE ${PROJECT_SOURCE_DIR}/sync_mess.pb.cpp)
 add_custom_command(OUTPUT ${SYNC_MESS_SOURCE} ${SYNC_MESS_H} COMMAND ./protoc.sh WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
 if(NOT MSVC)
-  set(CMAKE_CXX_FLAGS "-Wall -Wextra -std=c++17 -ggdb -O0 -Wfatal-errors " )
+  set(CMAKE_CXX_FLAGS "-Wall -Werror -Wextra -std=c++17 -ggdb -O0 -Wfatal-errors " )
 endif()
 SET(SOURCE
   easylogging++.cpp easylogging++.h

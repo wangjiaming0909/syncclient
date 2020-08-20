@@ -1,6 +1,7 @@
 #include <boost/noncopyable.hpp>
 #include <uv.h>
 #include <string>
+#include <set>
 #include "buffer.h"
 
 namespace uv
@@ -33,27 +34,22 @@ public:
   //buffer provide space for wirte
   int write(const char* d, size_t size, bool flush);
   template <typename T>
-  int write(const T& d, bool flush)
-  {
-    if (is_closed_) {
-      LOG(ERROR) << "can't write now tcp is closed...";
-      return -1;
-    }
-    auto ret = my_write_buf_.append(d);
-    if (flush) {
-      return do_write();
-    }
-    return ret;
-  }
+  int write(const T& d, bool flush);
 
   uv_loop_t* get_loop() { return uv_default_loop();}
   void close_loop();
-  int start_timer(uint64_t timeout, uint64_t repeat);
-  int stop_timer();
+  int start_ping_timer(uint64_t timeout, uint64_t repeat);
+  int stop_ping_timer();
+
+  //if timer is nullptr, means schedule a new timer, otherwise reschedule the old timer [timer]
+  //return the created timer or the timer passed in
+  uv_timer_t* start_timer(uv_timer_t* timer/*in out*/, uint64_t timeout, uint64_t repeat);
+  int stop_timer(uv_timer_t* timer);
 
   inline void set_should_reconnect(bool v) { is_should_reconnect_ = v; }
   int start_fs_monitoring(const std::string& path_or_file);
   void stop_fs_monitoring(const std::string& path_or_file);
+  void set_fs_event_trigger_gap(uint32_t milliseconds) { fs_event_trigger_gap_ = milliseconds;}
 
 protected:
   int on_connect(uv_connect_t* req, int status);
@@ -83,14 +79,15 @@ private:
   int connect_tcp();
   //prepare for reconnect, reinit the tcp
   int start_reconnect_timer();
-  void wakeup_first_timer();
+  void wakeup_ping_timer();
 
 protected:
   uv_tcp_t* tcp_ = nullptr;
   uv_connect_t* connect_req_ = nullptr;
   uv_write_t* write_req_ = nullptr;
   uv_buf_t write_buf_;
-  uv_timer_t* timer_ = nullptr;
+  uv_timer_t* ping_timer_ = nullptr;
+  std::set<uv_timer_t*> timers_;
   uv_timer_t* reconnect_timer_ = nullptr;
   reactor::buffer my_write_buf_;
   reactor::buffer my_read_buf_;
@@ -101,7 +98,24 @@ protected:
   bool is_should_reconnect_ = false;
   int current_reconnect_retry_time_ = 0;
   std::map<std::string, uv_fs_event_t*> fs_monitoring_map_;
+  //if a file [filename] triggered a fs event twice at time1 and time2, if time2 - time1 < gap
+  //UVClient will not call do_on_timeout at this file;
+  uint32_t fs_event_trigger_gap_ = 500;//0.5s
   static const int reconnect_fail_wait_ = 2000;//1 second
   static const int reconnect_retry_times_ = 5;
 };
+
+template <typename T>
+int UVClient::write(const T& d, bool flush)
+{
+  if (is_closed_) {
+    LOG(ERROR) << "can't write now tcp is closed...";
+    return -1;
+  }
+  auto ret = my_write_buf_.append(d);
+  if (flush) {
+    return do_write();
+  }
+  return ret;
+}
 }

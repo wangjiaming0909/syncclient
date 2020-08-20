@@ -630,7 +630,7 @@ int buffer::prepend(const buffer& other, uint32_t data_len, Iter start)
 char* buffer::pullup(int64_t size)
 {
     //如果size 比 total_len_ 大, 那么将不能保证第一个node可以达到size的大小,因此返回nullptr
-    if(size == 0 || size > total_len_)
+    if(size == 0 || size > (int64_t)total_len_)
         return nullptr;
 
     if(size < 0) //传递负值,表示全部align到第一个节点

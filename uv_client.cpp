@@ -31,6 +31,7 @@ void close_cb(uv_handle_t* handle)
 
 void read_alloc_cb(uv_handle_t* handle, size_t size, uv_buf_t* buf)
 {
+  (void)handle;
   buf->base = (char*)calloc(size, 1);
   buf->len = size;
 }
@@ -71,8 +72,8 @@ UVClient::~UVClient()
   tcp_ = nullptr;
   delete connect_req_;
   connect_req_ = nullptr;
-  delete timer_;
-  timer_ = nullptr;
+  delete ping_timer_;
+  ping_timer_ = nullptr;
   delete write_req_;
   write_req_ = nullptr;
   delete reconnect_timer_;
@@ -80,6 +81,9 @@ UVClient::~UVClient()
   for(auto& pair : fs_monitoring_map_) {
     delete pair.second;
     pair.second = nullptr;
+  }
+  for(auto* t : timers_) {
+    delete t;
   }
 }
 
@@ -94,9 +98,7 @@ int UVClient::init(const char* server_addr, int port)
   tcp_ = new uv_tcp_t();
   connect_req_ = new uv_connect_t();
 
-  timer_ = new uv_timer_t();
-  timer_->data = this;
-  uv_timer_init(get_loop(), timer_);
+  ping_timer_ = new uv_timer_t();
   return 0;
 }
 
@@ -173,9 +175,9 @@ int UVClient::start_reconnect_timer()
   return uv_timer_start(reconnect_timer_, timer_cb, reconnect_fail_wait_, reconnect_fail_wait_);
 }
 
-void UVClient::wakeup_first_timer()
+void UVClient::wakeup_ping_timer()
 {
-  if (timer_) start_timer(0, 0);
+  if (ping_timer_) start_ping_timer(0, 0);
 }
 
 void UVClient::close_loop()
@@ -183,22 +185,58 @@ void UVClient::close_loop()
   uv_stop(get_loop());
 }
 
-int UVClient::start_timer(uint64_t timeout, uint64_t repeat)
+int UVClient::start_ping_timer(uint64_t timeout, uint64_t repeat)
 {
-  //LOG(DEBUG) << "UVClient start_timer timeout: " << timeout << " repeat: " << repeat;
-  if (timer_) {
-    return uv_timer_start(timer_, timer_cb, timeout, repeat);
+  //LOG(DEBUG) << "UVClient start_ping_timer timeout: " << timeout << " repeat: " << repeat;
+  if (ping_timer_) {
+    ping_timer_->data = this;
+    uv_timer_init(get_loop(), ping_timer_);
+    return uv_timer_start(ping_timer_, timer_cb, timeout, repeat);
   }
   return -1;
 }
 
-int UVClient::stop_timer()
+int UVClient::stop_ping_timer()
 {
   //LOG(DEBUG) << "UVClient stop_timer";
-  if (timer_)
-    return uv_timer_stop(timer_);
+  if (ping_timer_)
+    return uv_timer_stop(ping_timer_);
   return -1;
 }
+
+uv_timer_t* UVClient::start_timer(uv_timer_t* timer/*in out*/, uint64_t timeout, uint64_t repeat)
+{
+  if (timer == nullptr) {
+    timer = new uv_timer_t();
+    uv_timer_init(get_loop(), timer);
+    timer->data = this;
+    timers_.insert(timer);
+  }
+  if (uv_timer_start(timer, timer_cb, timeout, repeat) != 0)
+    timer = nullptr;
+  return timer;
+}
+
+int UVClient::stop_timer(uv_timer_t* timer)
+{
+  auto it = timers_.find(timer);
+  int ret = 0;
+  if (it == timers_.end()) {
+    LOG(WARNING) << "stoping a nonexist timer: " << timer;
+    ret = -1;
+  }
+  if(uv_timer_stop(timer) == 0) {
+    timers_.erase(it);
+    delete timer;
+    timer = nullptr;
+    ret = 0;
+  } else {
+    LOG(WARNING) << "stop timer: " << timer << " failed: " << strerror(errno);
+    ret = -1;
+  }
+  return ret;
+}
+
 
 size_t UVClient::init_write_req()
 {
@@ -253,7 +291,7 @@ int UVClient::on_connect(uv_connect_t* req, int status)
   if (is_should_reconnect_ && is_closed_) {
     is_closed_ = false;
     current_reconnect_retry_time_ = 0;
-    wakeup_first_timer();
+    wakeup_ping_timer();
   }
   //LOG(DEBUG) << "on connect in syncclient status: " << status;
   uv_read_start((uv_stream_t*)req->handle, read_alloc_cb, read_cb);
@@ -302,8 +340,8 @@ int UVClient::on_read(uv_stream_t* stream, ssize_t size, const uv_buf_t* buf)
 int UVClient::on_timeout(uv_timer_t* handle)
 {
   //LOG(DEBUG) << "UVClient on_timeout";
-  //first timer to provide call back for sub classes
-  if (handle == timer_)
+  //ping timer to provide ping callback
+  if (handle == ping_timer_)
     return do_on_timeout(handle);
 
   //base self timers
@@ -321,6 +359,7 @@ int UVClient::on_timeout(uv_timer_t* handle)
 
 int UVClient::on_prepare(uv_prepare_t* handle)
 {
+  (void)handle;
   int ret = 0;
   return ret;
 }
