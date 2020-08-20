@@ -366,6 +366,11 @@ int UVClient::on_prepare(uv_prepare_t* handle)
 
 int UVClient::on_fs_event(uv_fs_event_t* handle, const char* filename, int events, int status)
 {
+  auto it = fs_event_map_.find(handle);
+  //means this is the first time that this handle trigger a fs event
+  if (it == fs_event_map_.end()) {
+
+  }
   return do_on_fs_event(handle, filename, events, status);
 }
 }

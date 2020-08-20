@@ -55,7 +55,7 @@ protected:
   int on_connect(uv_connect_t* req, int status);
   int after_write(uv_write_t* req, int status);
   int on_close(uv_handle_t* handle);
-  int read_alloc(uv_handle_t* handle, size_t size, uv_buf_t* buf);
+  //int read_alloc(uv_handle_t* handle, size_t size, uv_buf_t* buf);
   int on_read(uv_stream_t* stream, ssize_t size, const uv_buf_t* buf);
   int on_timeout(uv_timer_t* handle);
   int on_prepare(uv_prepare_t* handle);
@@ -82,6 +82,15 @@ private:
   void wakeup_ping_timer();
 
 protected:
+  struct fs_event_info {
+    uv_fs_event_t* fs_event;
+    const char* filename;
+    int events;
+    int status;
+    uint64_t last_timeout;
+  };
+
+protected:
   uv_tcp_t* tcp_ = nullptr;
   uv_connect_t* connect_req_ = nullptr;
   uv_write_t* write_req_ = nullptr;
@@ -101,6 +110,7 @@ protected:
   //if a file [filename] triggered a fs event twice at time1 and time2, if time2 - time1 < gap
   //UVClient will not call do_on_timeout at this file;
   uint32_t fs_event_trigger_gap_ = 500;//0.5s
+  std::map<uv_fs_event_t*, fs_event_info*> fs_event_map_;
   static const int reconnect_fail_wait_ = 2000;//1 second
   static const int reconnect_retry_times_ = 5;
 };
