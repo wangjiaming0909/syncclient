@@ -2,6 +2,8 @@
 #include "buffer.h"
 #include "easylogging++.h"
 #include "sync_mess.pb.h"
+#include <boost/filesystem.hpp>
+#include <boost/filesystem/path.hpp>
 
 
 namespace sync_client
@@ -107,10 +109,28 @@ int SyncClient::do_on_timeout(uv_timer_t* handle)
   return ret;
 }
 
+bool SyncClient::is_should_sync(const std::string& filename)
+{
+  if (filename.find(SYNC_PREFIX) != 0
+      || !boost::filesystem::exists(boost::filesystem::path(filename)))
+    return false;
+  return true;
+}
+
 int SyncClient::do_on_fs_event(uv_fs_event_t* handle, const char* filename, int events, int status)
 {
   (void)handle;
   LOG(DEBUG) << "do on fs event filename: " << filename << " events: " << events << " status: " << status;
+  auto it = sync_entry_map_.find(filename);
+  if (it != sync_entry_map_.end()) {
+    LOG(INFO) << "cancel a syncing entry: " << filename << " and resyncing it";
+
+  }
+  if (!is_should_sync(std::string(filename))) {
+    LOG(INFO) << "skip sync file: " << filename;
+  } else {
+    LOG(INFO) << "start syncing: " << filename;
+  }
   return 0;
 }
 }

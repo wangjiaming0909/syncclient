@@ -5,11 +5,27 @@
 #include "decoder.h"
 #include "sync_package.h"
 
+#ifndef SYNC_PREFIX
+#define SYNC_PREFIX "sync_"
+#endif
 
 namespace sync_client
 {
 using namespace uv;
 using namespace filesync;
+
+enum class SyncEntryState
+{
+  SYNCING = 0, PAUSED, FAILED, CANCELED
+};
+
+struct SyncEntryInfo {
+  std::string* filename;
+  uint64_t total_len;
+  uint64_t sent;
+  SyncEntryState state;
+};
+
 class SyncClient : public UVClient
 {
 static uint64_t DEFAULT_TIMER_INTERVAL;
@@ -28,11 +44,16 @@ protected:
   virtual int do_on_fs_event(uv_fs_event_t* handle, const char* filename, int events, int status) override;
 
 private:
+  bool is_should_sync(const std::string& filename);
+
+private:
   reactor::Decoder<filesync::SyncPackage, int64_t> decoder_;
   char* client_hello_package_ = nullptr;
   size_t client_hello_package_size_ = 0;
-  uint64_t timer_interval_;
+  uint64_t timer_interval_ = 0;
   bool is_ping_failed_ = false;
+
+  std::map<std::string, SyncEntryInfo> sync_entry_map_;
 };
 
 }

@@ -90,6 +90,13 @@ UVClient::~UVClient()
   for(auto* t : timers_) {
     delete t;
   }
+  std::list<std::string> filenames{};
+  for (auto it = fs_monitoring_map_.begin(); it != fs_monitoring_map_.end(); ++it) {
+    filenames.push_back(it->first);
+  }
+  for (auto it = filenames.begin(); it != filenames.end(); ++it) {
+    stop_fs_monitoring(*it);
+  }
 }
 
 int UVClient::init(const char* server_addr, int port)
@@ -294,6 +301,7 @@ int UVClient::start_fs_monitoring(const std::string& path_or_file)
     return -1;
   }
   fs_monitoring_map_[path_or_file] = fs_event;
+  fs_event_map_[fs_event];
   if (fs_event_check_ == nullptr) {
     using namespace std::placeholders;
     fs_event_check_ = start_check(nullptr, std::bind(&UVClient::fs_event_check_cb, this, _1));
@@ -309,7 +317,9 @@ void UVClient::stop_fs_monitoring(const std::string& path_or_file)
     uv_fs_event_stop(handle);
     auto it = fs_event_map_.find(handle);
     if (it != fs_event_map_.end()) {
-      delete it->second;
+      for(auto info_it = it->second.begin(); info_it != it->second.end(); ++it) {
+        delete info_it->second;
+      }
       fs_event_map_.erase(it);
     }
     delete handle;
@@ -417,12 +427,17 @@ int UVClient::on_fs_event(uv_fs_event_t* handle, const char* filename, int event
   auto it = fs_event_map_.find(handle);
   auto t = uv_now(get_loop());
   //means this is the first time that this handle trigger a fs event
-  if (it == fs_event_map_.end()) {
-    fs_event_info* fse_info= new fs_event_info{handle, filename, events, status, t};
-    fs_event_map_[handle] = fse_info;
-    fse_info->last_timeout = t;
+  if (it != fs_event_map_.end()) {
+    auto it_ev_info = fs_event_map_[handle].find(filename);
+    if (it_ev_info == fs_event_map_[handle].end()) {
+      fs_event_info* fse_info = new fs_event_info{handle, filename, events, status, t};
+      fs_event_map_[handle][filename] = fse_info;
+      fse_info->last_timeout = t;
+    } else {
+      it_ev_info->second->last_timeout = t;
+    }
   } else { //not the first time
-    it->second->last_timeout = t;
+    LOG(WARNING) << "fs event and fs_event_map not match handle: " << handle << " filename: " << filename << " events: " << events;
   }
   return 0;
 }
@@ -433,13 +448,18 @@ int UVClient::fs_event_check_cb(uv_check_t* check)
   auto now = uv_now(get_loop());
   decltype(fs_event_map_) m;
   for(auto& p : fs_event_map_) {
-    if (now - p.second->last_timeout > fs_event_trigger_gap_) {
-      m.insert(p);
+    for (auto it = p.second.begin(); it != p.second.end();) {
+      if (now - it->second->last_timeout > fs_event_trigger_gap_) {
+        m[p.first][it->first] = it->second;
+        p.second.erase(it++);
+      } else it++;
     }
   }
   for(auto& p : m) {
-    do_on_fs_event(p.first, p.second->filename, p.second->events, p.second->status);
-    p.second->last_timeout = now;
+    for(auto it = p.second.begin(); it != p.second.end(); ++it) {
+      do_on_fs_event(p.first, it->first.c_str(), it->second->events, it->second->status);
+      delete it->second;
+    }
   }
   return 0;
 }

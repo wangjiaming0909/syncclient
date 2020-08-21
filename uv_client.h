@@ -117,7 +117,7 @@ protected:
   //UVClient will not call do_on_timeout at this file;
   uint32_t fs_event_trigger_gap_ = 500;//0.5s
   uv_check_t* fs_event_check_ = nullptr;
-  std::map<uv_fs_event_t*, fs_event_info*> fs_event_map_;
+  std::map<uv_fs_event_t*, std::map<std::string,fs_event_info*>> fs_event_map_;
   std::map<uv_check_t*, std::function<int (uv_check_t*)>> check_cbs_;
   static const int reconnect_fail_wait_ = 2000;//1 second
   static const int reconnect_retry_times_ = 5;
