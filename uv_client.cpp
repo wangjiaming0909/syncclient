@@ -83,10 +83,6 @@ UVClient::~UVClient()
   write_req_ = nullptr;
   delete reconnect_timer_;
   reconnect_timer_ = nullptr;
-  for(auto& pair : fs_monitoring_map_) {
-    delete pair.second;
-    pair.second = nullptr;
-  }
   for(auto* t : timers_) {
     delete t;
   }
@@ -201,6 +197,7 @@ int UVClient::start_ping_timer(uint64_t timeout, uint64_t repeat)
 {
   //LOG(DEBUG) << "UVClient start_ping_timer timeout: " << timeout << " repeat: " << repeat;
   if (ping_timer_) {
+    uv_timer_stop(ping_timer_);
     ping_timer_->data = this;
     uv_timer_init(get_loop(), ping_timer_);
     return uv_timer_start(ping_timer_, timer_cb, timeout, repeat);
