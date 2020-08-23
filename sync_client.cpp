@@ -15,11 +15,14 @@ SyncClient::SyncClient()
 {
   timer_interval_ = DEFAULT_TIMER_INTERVAL;
   is_should_reconnect_ = true;
+  mes_ = (char*)::calloc(1, 10240);
+  memset(mes_, 97, 10239);
 }
 SyncClient::~SyncClient()
 {
   delete client_hello_package_;
   client_hello_package_ = nullptr;
+  free(mes_);
 }
 
 int SyncClient::do_on_connect(uv_connect_t* req, int status)
@@ -34,7 +37,7 @@ int SyncClient::do_on_connect(uv_connect_t* req, int status)
 int SyncClient::ping()
 {
   if (!client_hello_package_) {
-    auto p = filesync::getHelloPackage("hello", filesync::PackageType::Client);
+    auto p = filesync::getHelloPackage(mes_, filesync::PackageType::Client);
     client_hello_package_size_ = p->ByteSizeLong();
     client_hello_package_ = (char*)::calloc(client_hello_package_size_, 1);
     p->SerializeToArray(client_hello_package_, client_hello_package_size_);

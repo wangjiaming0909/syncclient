@@ -49,7 +49,7 @@ private:
 private:
   reactor::Decoder<filesync::SyncPackage, int64_t> decoder_;
   char* client_hello_package_ = nullptr;
-  size_t client_hello_package_size_ = 0;
+  int64_t client_hello_package_size_ = 0;
   uint64_t timer_interval_ = 0;
   bool is_ping_failed_ = false;
 
