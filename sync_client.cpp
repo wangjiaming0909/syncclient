@@ -8,7 +8,7 @@
 
 namespace sync_client
 {
-uint64_t SyncClient::DEFAULT_TIMER_INTERVAL = 1000;
+uint64_t SyncClient::DEFAULT_TIMER_INTERVAL = 2000;
 
 SyncClient::SyncClient()
   : UVClient()
@@ -30,7 +30,9 @@ int SyncClient::do_on_connect(uv_connect_t* req, int status)
   (void)req;
   (void)status;
   LOG(DEBUG) << "SyncClient do_on_connect";
-  if (is_ping_failed_) return 0;
+  if (is_ping_failed_) {
+    return 0;
+  }
   return start_ping_timer(timer_interval_, timer_interval_);
 }
 
@@ -43,9 +45,12 @@ int SyncClient::ping()
     p->SerializeToArray(client_hello_package_, client_hello_package_size_);
   }
   //TODO size type long?
-  if (write(client_hello_package_size_, false) > 0)
-    return write(client_hello_package_, client_hello_package_size_, true);
-  return -1;
+  for(int i = 0; i < 100; i++) {
+    if (write(client_hello_package_size_, false) > 0)
+      write(client_hello_package_, client_hello_package_size_, true);
+  }
+  return 0;
+  //return -1;
 }
 
 int SyncClient::do_after_write(uv_write_t* req, int status)
@@ -70,10 +75,14 @@ int SyncClient::do_on_read(uv_stream_t* stream, ssize_t size, const uv_buf_t* bu
 {
   (void)stream;
   using namespace filesync;
-  reactor::buffer mb;
-  mb.append(buf->base, size);
-  while(mb.buffer_length() > sizeof(int64_t)) {
-    auto len_parsed = decoder_.decode(mb);
+  //LOG(DEBUG) << "do on read size: " << size;
+  //LOG(DEBUG) << "my_read_buf_ size: " << my_read_buf_.total_len();
+  my_read_buf_.append(buf->base, size);
+  while(my_read_buf_.buffer_length() > sizeof(int64_t)) {
+    //LOG(DEBUG) << "before decode buf len: " << my_read_buf_.total_len();
+    auto len_parsed = decoder_.decode(my_read_buf_);
+    //LOG(DEBUG) << "after decode len parsed: " << len_parsed;
+    //LOG(DEBUG) << "after decode buf len: " << my_read_buf_.total_len();
     if (len_parsed <= 0) {
       if (decoder_.isError()) {
         LOG(ERROR) << "do on read parse error";
@@ -84,12 +93,14 @@ int SyncClient::do_on_read(uv_stream_t* stream, ssize_t size, const uv_buf_t* bu
       auto mess = decoder_.getMess();
       if (mess) {
         if (mess->header().command() == Command::ServerHello) {
-          LOG(DEBUG) << "received server hello";
+          LOG(INFO) << "received server hello";
         }
       }
     }
-    decoder_.reset();
+    if (len_parsed == 0)
+      break;
   }
+  //LOG(DEBUG) << "returning do on read buf len: " << my_read_buf_.total_len();
   return 0;
 }
 

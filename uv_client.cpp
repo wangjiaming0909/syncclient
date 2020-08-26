@@ -1,4 +1,5 @@
 #include "uv_client.h"
+#include "buffer.h"
 #include "easylogging++.h"
 
 namespace uv

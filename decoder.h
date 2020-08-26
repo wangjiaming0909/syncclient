@@ -144,6 +144,7 @@ private:
     if (!ret)
     {
       state_ = ERROR;
+      LOG(ERROR) << "decode error..";
       reset();
       return 0;
     }

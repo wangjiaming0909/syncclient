@@ -52,6 +52,7 @@ private:
   int64_t client_hello_package_size_ = 0;
   uint64_t timer_interval_ = 0;
   bool is_ping_failed_ = false;
+  char* mes_ = nullptr;
 
   std::map<std::string, SyncEntryInfo> sync_entry_map_;
 };
