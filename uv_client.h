@@ -130,6 +130,10 @@ int UVClient::write(const T& d, bool flush)
     LOG(ERROR) << "can't write now tcp is closed...";
     return -1;
   }
+  if (my_write_buf_.total_len() > 1024 * 1024 * 10) {
+    //LOG(WARNING) << "writing too much please wait...";
+    return 0;
+  }
   auto ret = my_write_buf_.append(d);
   if (flush) {
     return do_write();

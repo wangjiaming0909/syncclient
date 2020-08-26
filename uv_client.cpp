@@ -139,6 +139,10 @@ int UVClient::write(const char* d, size_t size, bool flush)
     LOG(ERROR) << "can't write now tcp is closed...";
     return -1;
   }
+  if (my_write_buf_.total_len() > 1024 * 1024 * 10) {
+    //LOG(WARNING) << "writing too much please wait...";
+    return 0;
+  }
   auto ret = my_write_buf_.append((const void*)d, size);
   if ( ret < 0) {
     LOG(ERROR) << "UVClient::write error";
@@ -348,6 +352,7 @@ int UVClient::after_write(uv_write_t* req, int status)
 {
   my_write_buf_.drain(write_buf_.len);
   do_after_write(req, status);
+  delete req;
   if (my_write_buf_.total_len() > 0) {
     do_write();
   }
@@ -358,6 +363,8 @@ int UVClient::on_close(uv_handle_t* handle)
 {
   //LOG(DEBUG) << "UVClient on_close";
   is_closed_ = true;
+  my_read_buf_.drain(my_read_buf_.total_len());
+  my_write_buf_.drain(my_write_buf_.total_len());
   if (is_should_reconnect_ && current_reconnect_retry_time_ < reconnect_retry_times_) {
     if (start_reconnect_timer()) {
       LOG(ERROR) << "on close start reconnect timer failed";

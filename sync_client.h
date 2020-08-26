@@ -48,6 +48,7 @@ private:
 
 private:
   reactor::Decoder<filesync::SyncPackage, int64_t> decoder_;
+  filesync::SyncPackagePtr hello_package_;
   char* client_hello_package_ = nullptr;
   int64_t client_hello_package_size_ = 0;
   uint64_t timer_interval_ = 0;

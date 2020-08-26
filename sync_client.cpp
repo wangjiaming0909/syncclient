@@ -39,10 +39,10 @@ int SyncClient::do_on_connect(uv_connect_t* req, int status)
 int SyncClient::ping()
 {
   if (!client_hello_package_) {
-    auto p = filesync::getHelloPackage(mes_, filesync::PackageType::Client);
-    client_hello_package_size_ = p->ByteSizeLong();
+    hello_package_ = filesync::getHelloPackage(mes_, filesync::PackageType::Client);
+    client_hello_package_size_ = hello_package_->ByteSizeLong();
     client_hello_package_ = (char*)::calloc(client_hello_package_size_, 1);
-    p->SerializeToArray(client_hello_package_, client_hello_package_size_);
+    hello_package_->SerializeToArray(client_hello_package_, client_hello_package_size_);
   }
   //TODO size type long?
   for(int i = 0; i < 100; i++) {
