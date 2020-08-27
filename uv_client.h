@@ -119,7 +119,7 @@ protected:
   uv_check_t* fs_event_check_ = nullptr;
   std::map<uv_fs_event_t*, std::map<std::string,fs_event_info*>> fs_event_map_;
   std::map<uv_check_t*, std::function<int (uv_check_t*)>> check_cbs_;
-  static const int reconnect_fail_wait_ = 2000;//1 second
+  static const int reconnect_fail_wait_ = 2000;//2s
   static const int reconnect_retry_times_ = 5;
 };
 
@@ -131,7 +131,7 @@ int UVClient::write(const T& d, bool flush)
     return -1;
   }
   if (my_write_buf_.total_len() > 1024 * 1024 * 10) {
-    //LOG(WARNING) << "writing too much please wait...";
+    LOG(WARNING) << "writing too much please wait...";
     return 0;
   }
   auto ret = my_write_buf_.append(d);
