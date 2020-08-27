@@ -1,3 +1,4 @@
+#pragma once
 #include <boost/noncopyable.hpp>
 #include <cstdint>
 #include "sync_mess.pb.h"
@@ -16,13 +17,22 @@ using namespace filesync;
 
 enum class SyncEntryState
 {
-  SYNCING = 0, PAUSED, FAILED, CANCELED
+  SYNCING = 0, PAUSED, FAILED, CANCELED, IDLE
 };
 
 struct SyncEntryInfo {
-  std::string* filename;
+  SyncEntryInfo()
+  {
+    filename = nullptr;
+    total_len = 0;
+    sent = 0;
+    target = 0;
+    state = SyncEntryState::IDLE;
+  }
+  const std::string* filename;
   uint64_t total_len;
   uint64_t sent;
+  uint64_t target;
   SyncEntryState state;
 };
 
@@ -35,6 +45,9 @@ public:
 
 protected:
   int ping();
+  int start_send_file(const char* path);
+  int file_cb(uv_fs_t* req, uv_fs_type fs_type);
+
   virtual int do_on_connect(uv_connect_t* req, int status) override;
   virtual int do_after_write(uv_write_t* req, int status) override;
   virtual size_t do_init_write_req() override;
@@ -57,6 +70,7 @@ private:
   char* mes_ = nullptr;
 
   std::map<std::string, SyncEntryInfo> sync_entry_map_;
+  std::map<std::string, FSFile*> fs_files_map_;
 };
 
 }

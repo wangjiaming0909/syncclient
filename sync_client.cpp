@@ -23,6 +23,8 @@ SyncClient::~SyncClient()
   delete client_hello_package_;
   client_hello_package_ = nullptr;
   free(mes_);
+  for(auto& p : fs_files_map_)
+    delete p.second;
 }
 
 int SyncClient::do_on_connect(uv_connect_t* req, int status)
@@ -165,4 +167,21 @@ int SyncClient::do_on_fs_event(uv_fs_event_t* handle, const char* filename, int 
   }
   return 0;
 }
+
+int SyncClient::start_send_file(const char*)
+{
+  return 0;
+}
+
+int SyncClient::file_cb(uv_fs_t*, uv_fs_type fs_type)
+{
+  switch (fs_type) {
+    case UV_FS_OPEN:
+      break;
+    default:
+      break;
+  }
+  return 0;
+}
+
 }

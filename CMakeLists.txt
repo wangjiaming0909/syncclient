@@ -19,6 +19,7 @@ SET(SOURCE
   ${SYNC_MESS_H} ${SYNC_MESS_SOURCE}
   buffer.cpp buffer.h
   uv_client.cpp uv_client.h
+  uv_fs.h uv_fs.cpp
   decoder.h)
 if (WIN32)
   include_directories("D://path/include")

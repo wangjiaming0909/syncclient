@@ -1,3 +1,4 @@
+#pragma once
 #include <boost/noncopyable.hpp>
 #include <uv.h>
 #include <string>
