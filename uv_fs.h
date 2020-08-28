@@ -17,6 +17,7 @@ public:
   int open(int flags, int mode);
   int close();
   int read(uint32_t size, int64_t offset);
+  int stat();
   int write();
   reactor::buffer& read_buf() {return read_buf_;}
   reactor::buffer& write_buf() {return write_buf_;}

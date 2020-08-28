@@ -42,6 +42,15 @@ int FSFile::write()
   return 0;
 }
 
+int FSFile::stat()
+{
+  auto ret = uv_fs_stat(loop_, fs_, fs_->path, fs_callback);
+  if (ret < 0) {
+    LOG(ERROR) << "fs stat file: " << fs_->path << " failed";
+  }
+  return ret;
+}
+
 void fs_callback(uv_fs_t* req)
 {
   auto* f = (FSFile*)req->data;
@@ -56,6 +65,8 @@ void fs_callback(uv_fs_t* req)
       free(f->uv_read_buf_.base);
       f->uv_read_buf_.base = nullptr;
       f->uv_read_buf_.len = 0;
+      break;
+    case UV_FS_STAT:
       break;
     default:
       break;

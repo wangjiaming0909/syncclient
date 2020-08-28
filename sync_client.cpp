@@ -168,16 +168,65 @@ int SyncClient::do_on_fs_event(uv_fs_event_t* handle, const char* filename, int 
   return 0;
 }
 
-int SyncClient::start_send_file(const char*)
+int SyncClient::start_send_file(const char* path)
 {
+  auto p = sync_entry_map_.insert({path, SyncEntryInfo()});
+  if (!p.second) {
+    LOG(ERROR) << "insert into sync entry map failed, may have had this file already";
+    return -1;
+  }
+  auto it = p.first;
+  it->second.filename = &it->first;
+  it->second.sent = 0;
+  it->second.state = SyncEntryState::SYNCING;
+
+  using namespace std::placeholders;
+  auto* fs_file = new FSFile(get_loop(), path, std::bind(&SyncClient::file_cb, this, _1, _2));
+  auto pr = fs_files_map_.insert({path,fs_file });
+  if (!pr.second) {
+    LOG(ERROR) << "insert into fs file ,ap failed " << path << " may have had this file already";
+    //TODO erase this file from sync entry map
+    return -1;
+  }
+  pr.first->second->stat();
   return 0;
 }
 
-int SyncClient::file_cb(uv_fs_t*, uv_fs_type fs_type)
+int SyncClient::file_cb(uv_fs_t* fs, uv_fs_type fs_type)
 {
   switch (fs_type) {
     case UV_FS_OPEN:
-      break;
+      {
+        LOG(DEBUG) << "on fs open";
+        auto* file = (FSFile*)fs->data;
+        auto it_info = sync_entry_map_.find(fs->path);
+        auto sent = it_info->second.sent;
+        auto target = it_info->second.target;
+        if (target - sent > 0) {
+          file->read(sent + 4096 > target ? target - sent : 4096, it_info->second.sent);
+        }
+        break;
+      }
+    case UV_FS_STAT:
+      {
+        LOG(DEBUG) << "on fs stat";
+        auto it_info = sync_entry_map_.find(fs->path);
+        it_info->second.total_len = fs->statbuf.st_size;
+        it_info->second.target = fs->statbuf.st_size;
+        auto* file = (FSFile*)fs->data;
+        file->open(O_RDONLY, 0);
+        break;
+      }
+    case UV_FS_READ:
+      {
+        LOG(DEBUG) << "on fs read";
+        break;
+      }
+    case UV_FS_CLOSE:
+      {
+        LOG(DEBUG) << "on fs close";
+        break;
+      }
     default:
       break;
   }

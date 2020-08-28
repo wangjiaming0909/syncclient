@@ -5,6 +5,7 @@
 #include "uv_client.h"
 #include "decoder.h"
 #include "sync_package.h"
+#include "uv_fs.h"
 
 #ifndef SYNC_PREFIX
 #define SYNC_PREFIX "sync_"
