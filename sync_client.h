@@ -1,5 +1,6 @@
 #pragma once
 #include <boost/noncopyable.hpp>
+#include <boost/filesystem.hpp>
 #include <cstdint>
 #include "sync_mess.pb.h"
 #include "uv_client.h"
@@ -46,7 +47,8 @@ public:
 
 protected:
   int ping();
-  int start_send_file(const char* path);
+  //offset = 0 means from 0, target = 0 means read all
+  int start_send_file(const char* path, uint64_t offset = 0, uint64_t target = 0);
   int file_cb(uv_fs_t* req, uv_fs_type fs_type);
 
   virtual int do_on_connect(uv_connect_t* req, int status) override;
@@ -58,7 +60,7 @@ protected:
   virtual int do_on_fs_event(uv_fs_event_t* handle, const char* filename, int events, int status) override;
 
 private:
-  bool is_should_sync(const std::string& filename);
+  bool is_should_sync(const boost::filesystem::path& p);
 
 private:
   reactor::Decoder<filesync::SyncPackage, int64_t> decoder_;

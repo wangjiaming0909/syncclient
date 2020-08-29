@@ -27,7 +27,7 @@ int main()
   setupLogger();
   sync_client::SyncClient client;
   //client.init("192.168.1.5", 9090);
-  client.init("127.0.0.1", 9090);
+  client.init("172.16.70.39", 9090);
   client.start_fs_monitoring("/home/wjm/tmp");
   return client.start();
 }

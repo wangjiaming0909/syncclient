@@ -2,8 +2,8 @@
 #include "buffer.h"
 #include "easylogging++.h"
 #include "sync_mess.pb.h"
-#include "boost/filesystem.hpp"
 #include "boost/filesystem/path.hpp"
+#include <boost/filesystem/operations.hpp>
 
 
 namespace sync_client
@@ -143,10 +143,10 @@ int SyncClient::do_on_timeout(uv_timer_t* handle)
   return ret;
 }
 
-bool SyncClient::is_should_sync(const std::string& filename)
+bool SyncClient::is_should_sync(const boost::filesystem::path& p)
 {
-  if (filename.find(SYNC_PREFIX) != 0
-      || !boost::filesystem::exists(boost::filesystem::path(filename)))
+  if (p.filename().string().find(SYNC_PREFIX) != 0
+      || !boost::filesystem::exists(p))
     return false;
   return true;
 }
@@ -160,15 +160,17 @@ int SyncClient::do_on_fs_event(uv_fs_event_t* handle, const char* filename, int 
     LOG(INFO) << "cancel a syncing entry: " << filename << " and resyncing it";
 
   }
-  if (!is_should_sync(std::string(filename))) {
+  auto absolute_path = boost::filesystem::path(handle->path).append(filename);
+  if (!is_should_sync(absolute_path)) {
     LOG(INFO) << "skip sync file: " << filename;
   } else {
     LOG(INFO) << "start syncing: " << filename;
+    start_send_file(absolute_path.string().c_str());
   }
   return 0;
 }
 
-int SyncClient::start_send_file(const char* path)
+int SyncClient::start_send_file(const char* path, uint64_t offset, uint64_t target)
 {
   auto p = sync_entry_map_.insert({path, SyncEntryInfo()});
   if (!p.second) {
@@ -177,8 +179,9 @@ int SyncClient::start_send_file(const char* path)
   }
   auto it = p.first;
   it->second.filename = &it->first;
-  it->second.sent = 0;
+  it->second.sent = offset;
   it->second.state = SyncEntryState::SYNCING;
+  it->second.target = target;
 
   using namespace std::placeholders;
   auto* fs_file = new FSFile(get_loop(), path, std::bind(&SyncClient::file_cb, this, _1, _2));
@@ -194,37 +197,53 @@ int SyncClient::start_send_file(const char* path)
 
 int SyncClient::file_cb(uv_fs_t* fs, uv_fs_type fs_type)
 {
+  auto* file = (FSFile*)fs->data;
+  auto it_info = sync_entry_map_.find(file->file_name());
   switch (fs_type) {
-    case UV_FS_OPEN:
-      {
-        LOG(DEBUG) << "on fs open";
-        auto* file = (FSFile*)fs->data;
-        auto it_info = sync_entry_map_.find(fs->path);
-        auto sent = it_info->second.sent;
-        auto target = it_info->second.target;
-        if (target - sent > 0) {
-          file->read(sent + 4096 > target ? target - sent : 4096, it_info->second.sent);
-        }
-        break;
-      }
     case UV_FS_STAT:
       {
-        LOG(DEBUG) << "on fs stat";
-        auto it_info = sync_entry_map_.find(fs->path);
+        LOG(DEBUG) << "on fs stat " << file->file_name();
         it_info->second.total_len = fs->statbuf.st_size;
-        it_info->second.target = fs->statbuf.st_size;
+        LOG(DEBUG) << "file: " << file->file_name() << " size: " << fs->statbuf.st_size;
         auto* file = (FSFile*)fs->data;
-        file->open(O_RDONLY, 0);
+        file->open(UV_FS_O_RDONLY, 0);
         break;
       }
     case UV_FS_READ:
       {
-        LOG(DEBUG) << "on fs read";
+        LOG(DEBUG) << "on fs read " << file->file_name();
+        LOG(DEBUG) << "read buf size: " << file->read_buf().total_len();
+        //auto* c = file->read_buf().pullup(file->read_buf().total_len());
+        //LOG(DEBUG) << "content: " << c;
+        file->read_buf().drain(file->read_buf().total_len());
+        //sent the data
+        it_info->second.sent += uv_fs_get_result(fs);
+        LOG(DEBUG) << "sent: " << it_info->second.sent << " target: " << it_info->second.target << " total: " << it_info->second.total_len;
+        if (it_info->second.sent < it_info->second.total_len) {
+        } else {
+          file->close();
+          break;
+        }
+      }
+    case UV_FS_OPEN:
+      {
+        auto sent = it_info->second.sent;
+        auto target = it_info->second.target;
+        target = target == 0 ? it_info->second.total_len : target;
+        auto to_read = sent + 4096 > target ? target - sent : 4096;
+        LOG(DEBUG) << "on fs open " << file->file_name() << " start read: " << to_read;
+        if (target - sent > 0) {
+          file->read(to_read, it_info->second.sent);
+        }
         break;
       }
     case UV_FS_CLOSE:
       {
-        LOG(DEBUG) << "on fs close";
+        LOG(DEBUG) << "on fs close " << file->file_name();
+        sync_entry_map_.erase(it_info);
+        auto it = fs_files_map_.find(file->file_name());
+        delete it->second;
+        fs_files_map_.erase(it);
         break;
       }
     default:
