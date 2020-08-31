@@ -352,7 +352,6 @@ int UVClient::after_write(uv_write_t* req, int status)
 {
   my_write_buf_.drain(write_buf_.len);
   do_after_write(req, status);
-  delete req;
   if (my_write_buf_.total_len() > 0) {
     do_write();
   }

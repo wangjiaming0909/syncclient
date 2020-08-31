@@ -30,7 +30,7 @@ public:
   friend void fs_event_cb(uv_fs_event_t* handle, const char* filename, int events, int status);
   friend void check_cb(uv_check_t* handle);
   UVClient();
-  ~UVClient();
+  virtual ~UVClient();
   int init(const char*server_addr, int port);
   int start();
   int do_write();
