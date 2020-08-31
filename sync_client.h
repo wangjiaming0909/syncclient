@@ -7,6 +7,7 @@
 #include "decoder.h"
 #include "sync_package.h"
 #include "uv_fs.h"
+#include "buffer.h"
 
 #ifndef SYNC_PREFIX
 #define SYNC_PREFIX "sync_"
@@ -58,6 +59,8 @@ protected:
   virtual int do_on_read(uv_stream_t* stream, ssize_t size, const uv_buf_t* buf) override;
   virtual int do_on_timeout(uv_timer_t* handle) override;
   virtual int do_on_fs_event(uv_fs_event_t* handle, const char* filename, int events, int status) override;
+
+  int send_deposite_file_message(const char* file_name, uint64_t len, uint64_t from, reactor::buffer& buf);
 
 private:
   bool is_should_sync(const boost::filesystem::path& p);

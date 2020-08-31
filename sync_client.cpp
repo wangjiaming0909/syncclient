@@ -1,5 +1,4 @@
 #include "sync_client.h"
-#include "buffer.h"
 #include "easylogging++.h"
 #include "sync_mess.pb.h"
 #include "boost/filesystem/path.hpp"
@@ -15,8 +14,7 @@ SyncClient::SyncClient()
 {
   timer_interval_ = DEFAULT_TIMER_INTERVAL;
   is_should_reconnect_ = true;
-  mes_ = (char*)::calloc(1, 10240);
-  memset(mes_, 97, 10239);
+  mes_ = (char*)::calloc(1, 4096+1024);
 }
 SyncClient::~SyncClient()
 {
@@ -44,7 +42,7 @@ int SyncClient::do_on_connect(uv_connect_t* req, int status)
 int SyncClient::ping()
 {
   if (!client_hello_package_) {
-    hello_package_ = filesync::getHelloPackage(mes_, filesync::PackageType::Client);
+    hello_package_ = filesync::getHelloPackage("hello", filesync::PackageType::Client);
     client_hello_package_size_ = hello_package_->ByteSizeLong();
     client_hello_package_ = (char*)::calloc(client_hello_package_size_, 1);
     hello_package_->SerializeToArray(client_hello_package_, client_hello_package_size_);
@@ -215,7 +213,19 @@ int SyncClient::file_cb(uv_fs_t* fs, uv_fs_type fs_type)
         LOG(DEBUG) << "read buf size: " << file->read_buf().total_len();
         //auto* c = file->read_buf().pullup(file->read_buf().total_len());
         //LOG(DEBUG) << "content: " << c;
-        file->read_buf().drain(file->read_buf().total_len());
+        auto ret = send_deposite_file_message(file->file_name().c_str(),
+                                   it_info->second.total_len,
+                                   it_info->second.sent,
+                                   file->read_buf());
+        if ( ret < 0) {
+            LOG(ERROR) << "sending file: " << it_info->second.filename << " error";
+            LOG(ERROR) << "error at: [" << it_info->second.sent+1 << "] len: [" << uv_fs_get_result(fs) <<"]";
+            file->close();
+            break;
+        } else if (ret == 0) {
+            break;
+        }
+        //file->read_buf().drain(file->read_buf().total_len());
         //sent the data
         it_info->second.sent += uv_fs_get_result(fs);
         LOG(DEBUG) << "sent: " << it_info->second.sent << " target: " << it_info->second.target << " total: " << it_info->second.total_len;
@@ -250,6 +260,30 @@ int SyncClient::file_cb(uv_fs_t* fs, uv_fs_type fs_type)
       break;
   }
   return 0;
+}
+
+int SyncClient::send_deposite_file_message(const char* file_name, uint64_t len, uint64_t from, reactor::buffer& data)
+{
+    auto tmp_to = from;
+    uint32_t len_to_pullup = 4096;
+    while(data.total_len() > 0) {
+        if (data.total_len() < 4096) {
+            len_to_pullup = data.total_len();
+        }
+        auto* d = data.pullup(len_to_pullup);
+        tmp_to += len_to_pullup - 1;
+        auto package = filesync::getDepositeFilePackage(file_name, len, from, tmp_to, d);
+        int64_t size = package->ByteSizeLong();
+        package->SerializeToArray(mes_, size);
+        auto ret = write(size, false);
+        //if we got error when writing, should we clear all data in this buffer
+        //the only reason that this could happen will be the connection error
+        if (ret <= 0 || (ret = write(mes_, size, true)) < 0)
+            return ret;
+        data.drain(len_to_pullup);
+    }
+    assert(data.total_len() == 0);
+    return 1;
 }
 
 }
