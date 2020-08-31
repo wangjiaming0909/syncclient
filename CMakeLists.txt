@@ -2,16 +2,14 @@ cmake_minimum_required(VERSION 3.5)
 
 project(syncclient LANGUAGES CXX)
 
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 ADD_DEFINITIONS("-DELPP_THREAD_SAFE")
 ADD_DEFINITIONS("-DELPP_NO_DEFAULT_LOG_FILE")
 SET(SYNC_MESS_H ${PROJECT_SOURCE_DIR}/sync_mess.pb.h)
 SET(SYNC_MESS_SOURCE ${PROJECT_SOURCE_DIR}/sync_mess.pb.cpp)
 add_custom_command(OUTPUT ${SYNC_MESS_SOURCE} ${SYNC_MESS_H} COMMAND ./protoc.sh WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
-if(NOT MSVC)
-  set(CMAKE_CXX_FLAGS "-Wall -Wextra -std=c++17 -ggdb -O0 -Wfatal-errors " )
-endif()
+set(CMAKE_CXX_FLAGS "-Wall -Wextra -std=c++17 -ggdb -O0 -Wfatal-errors " )
 SET(SOURCE
   easylogging++.cpp easylogging++.h
   sync_client.cpp  sync_client.h
@@ -36,9 +34,6 @@ IF(WIN32)
   find_library(PROTOBUF_FOUND libprotobufd.dll)
   find_library(UV_FOUND NAME libuv.dll.a PATHS D://path/libuv/lib)
   find_library(BOOST_FILESYSTEM_FOUND NAME libboost-mgw73-mt-x32-1_70.dll.a PATHS D://path/boost/lib)
-
-  #ADD_DEFINITIONS("-D_ITERATOR_DEBUG_LEVEL=0")
-  #ADD_DEFINITIONS("-D_ALLOW_ITERATOR_DEBUG_LEVEL_MISMATCH")
 ELSE()
   find_library(UV_FOUND uv)
   find_library(PROTOBUF_FOUND protobuf)

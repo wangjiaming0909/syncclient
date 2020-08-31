@@ -28,7 +28,11 @@ protected:
   uv_loop_t* loop_ = nullptr;
   uv_fs_t* fs_ = nullptr;
   std::string file_name_;
+#ifdef __linux__
+  uv_os_fd_t handle_;
+#else
   uv_file handle_;
+#endif //UNIX
 
   uv_buf_t uv_read_buf_;
   uv_buf_t uv_write_buf_;
