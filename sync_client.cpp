@@ -218,12 +218,12 @@ int SyncClient::file_cb(uv_fs_t* fs, uv_fs_type fs_type)
                                    it_info->second.sent,
                                    file->read_buf());
         if ( ret < 0) {
-            LOG(ERROR) << "sending file: " << it_info->second.filename << " error";
-            LOG(ERROR) << "error at: [" << it_info->second.sent+1 << "] len: [" << uv_fs_get_result(fs) <<"]";
-            file->close();
-            break;
+          LOG(ERROR) << "sending file: " << it_info->second.filename << " error";
+          LOG(ERROR) << "error at: [" << it_info->second.sent+1 << "] len: [" << uv_fs_get_result(fs) <<"]";
+          file->close();
+          break;
         } else if (ret == 0) {
-            break;
+          break;
         }
         //file->read_buf().drain(file->read_buf().total_len());
         //sent the data
@@ -241,7 +241,7 @@ int SyncClient::file_cb(uv_fs_t* fs, uv_fs_type fs_type)
         auto target = it_info->second.target;
         target = target == 0 ? it_info->second.total_len : target;
         auto to_read = sent + 4096 > target ? target - sent : 4096;
-        LOG(DEBUG) << "on fs open " << file->file_name() << " start read: " << to_read;
+        LOG(DEBUG) << "on fs open " << file->file_name() << " start read: " << to_read << " start from: " >> it_info->second.sent;
         if (target - sent > 0) {
           file->read(to_read, it_info->second.sent);
         }
@@ -264,26 +264,28 @@ int SyncClient::file_cb(uv_fs_t* fs, uv_fs_type fs_type)
 
 int SyncClient::send_deposite_file_message(const char* file_name, uint64_t len, uint64_t from, reactor::buffer& data)
 {
-    auto tmp_to = from;
-    uint32_t len_to_pullup = 4096;
-    while(data.total_len() > 0) {
-        if (data.total_len() < 4096) {
-            len_to_pullup = data.total_len();
-        }
-        auto* d = data.pullup(len_to_pullup);
-        tmp_to += len_to_pullup - 1;
-        auto package = filesync::getDepositeFilePackage(file_name, len, from, tmp_to, d);
-        int64_t size = package->ByteSizeLong();
-        package->SerializeToArray(mes_, size);
-        auto ret = write(size, false);
-        //if we got error when writing, should we clear all data in this buffer
-        //the only reason that this could happen will be the connection error
-        if (ret <= 0 || (ret = write(mes_, size, true)) < 0)
-            return ret;
-        data.drain(len_to_pullup);
+  auto tmp_to = from;
+  uint32_t len_to_pullup = 4096;
+  while(data.total_len() > 0) {
+    if (data.total_len() < 4096) {
+      len_to_pullup = data.total_len();
     }
-    assert(data.total_len() == 0);
-    return 1;
+    auto* d = data.pullup(len_to_pullup);
+    tmp_to += len_to_pullup - 1;
+    auto package = filesync::getDepositeFilePackage(file_name, len, from, tmp_to, d);
+    int64_t size = package->ByteSizeLong();
+    package->SerializeToArray(mes_, size);
+    auto ret = write(size, false);
+    //if we got error when writing, should we clear all data in this buffer
+    //the only reason that this could happen will be the connection error
+    if (ret <= 0 || (ret = write(mes_, size, true)) < 0) {
+      LOG(WARNING) << "write return 0 or -1";
+      return ret;
+    }
+    data.drain(len_to_pullup);
+  }
+  assert(data.total_len() == 0);
+  return 1;
 }
 
 }
