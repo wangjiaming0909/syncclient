@@ -381,7 +381,7 @@ int UVClient::on_read(uv_stream_t* stream, ssize_t size, const uv_buf_t* buf)
   //LOG(DEBUG) << "UVClient on_read";
   int ret = 0;
   if (size < 0 || do_on_read(stream, size, buf) < 0) {
-    LOG(INFO) << "got EOF or read error";
+    LOG(ERROR) << "got EOF or read error";
     close_tcp();
     ret = -1;
   }

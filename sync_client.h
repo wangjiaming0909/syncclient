@@ -77,6 +77,7 @@ private:
 
   std::map<std::string, SyncEntryInfo> sync_entry_map_;
   std::map<std::string, FSFile*> fs_files_map_;
+  std::map<std::string, std::string> fs_files_path_map_;
 };
 
 }

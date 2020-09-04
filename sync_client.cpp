@@ -49,7 +49,8 @@ int SyncClient::ping()
   }
   //TODO size type long?
   int ret = 0;
-  for(int i = 0; i < 1; i++) {
+  for(int i = 0; i < 0; i++) {
+    LOG(INFO) << "pinging...";
     if ((ret = write(client_hello_package_size_, false)) > 0)
       write(client_hello_package_, client_hello_package_size_, true);
     else if (ret < 0) return -1;
@@ -163,6 +164,7 @@ int SyncClient::do_on_fs_event(uv_fs_event_t* handle, const char* filename, int 
     LOG(INFO) << "skip sync file: " << filename;
   } else {
     LOG(INFO) << "start syncing: " << filename;
+    fs_files_path_map_.insert({absolute_path.string(), filename});
     start_send_file(absolute_path.string().c_str());
   }
   return 0;
@@ -209,9 +211,8 @@ int SyncClient::file_cb(uv_fs_t* fs, uv_fs_type fs_type)
       }
     case UV_FS_READ:
       {
-        LOG(DEBUG) << "on fs read " << file->file_name() << " read buf size: " << file->read_buf().total_len();
-        //auto* c = file->read_buf().pullup(file->read_buf().total_len());
-        //LOG(DEBUG) << "content: " << c;
+        auto bytes_read = file->read_buf().total_len();
+        LOG(DEBUG) << "on fs read " << file->file_name() << " read buf size: " << bytes_read;
         auto ret = send_deposite_file_message(file->file_name().c_str(),
                                    it_info->second.total_len,
                                    it_info->second.sent,
@@ -224,9 +225,7 @@ int SyncClient::file_cb(uv_fs_t* fs, uv_fs_type fs_type)
         } else if (ret == 0) {
           break;
         }
-        //file->read_buf().drain(file->read_buf().total_len());
-        //sent the data
-        it_info->second.sent += uv_fs_get_result(fs);
+        it_info->second.sent += bytes_read;
         LOG(DEBUG) << "sent: " << it_info->second.sent << " target: " << it_info->second.target << " total: " << it_info->second.total_len;
         if (it_info->second.sent < it_info->second.total_len) {
         } else {
@@ -240,7 +239,7 @@ int SyncClient::file_cb(uv_fs_t* fs, uv_fs_type fs_type)
         auto target = it_info->second.target;
         target = target == 0 ? it_info->second.total_len : target;
         auto to_read = sent + 4096 > target ? target - sent : 4096;
-        LOG(DEBUG) << "on fs open " << file->file_name() << " start read: " << to_read << " start from: " >> it_info->second.sent;
+        LOG(DEBUG) << "on fs open " << file->file_name() << " start read: " << to_read << " start from: " << it_info->second.sent;
         if (target - sent > 0) {
           file->read(to_read, it_info->second.sent);
         }
@@ -271,17 +270,19 @@ int SyncClient::send_deposite_file_message(const char* file_name, uint64_t len, 
     }
     auto* d = data.pullup(len_to_pullup);
     tmp_to += len_to_pullup - 1;
-    auto package = filesync::getDepositeFilePackage(file_name, len, from, tmp_to, d);
+    auto package = filesync::getDepositeFilePackage(fs_files_path_map_[file_name].c_str(), len, from, tmp_to, d);
     int64_t size = package->ByteSizeLong();
     package->SerializeToArray(mes_, size);
+    LOG(DEBUG) << "build package size: " << size;
     auto ret = write(size, false);
     //if we got error when writing, should we clear all data in this buffer
     //the only reason that this could happen will be the connection error
     if (ret <= 0 || (ret = write(mes_, size, true)) < 0) {
-      LOG(WARNING) << "write return 0 or -1";
+      LOG(WARNING) << "writing file: " << file_name << " from: " << from << " to: " << tmp_to << " return 0 or -1";
       return ret;
     }
     data.drain(len_to_pullup);
+    LOG(INFO) << "writing file: " << file_name << " from: " << from << " to: " << tmp_to << " succeed " << len_to_pullup;
   }
   assert(data.total_len() == 0);
   return 1;
