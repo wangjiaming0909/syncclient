@@ -209,8 +209,7 @@ int SyncClient::file_cb(uv_fs_t* fs, uv_fs_type fs_type)
       }
     case UV_FS_READ:
       {
-        LOG(DEBUG) << "on fs read " << file->file_name();
-        LOG(DEBUG) << "read buf size: " << file->read_buf().total_len();
+        LOG(DEBUG) << "on fs read " << file->file_name() << " read buf size: " << file->read_buf().total_len();
         //auto* c = file->read_buf().pullup(file->read_buf().total_len());
         //LOG(DEBUG) << "content: " << c;
         auto ret = send_deposite_file_message(file->file_name().c_str(),

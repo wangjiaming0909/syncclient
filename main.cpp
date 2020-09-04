@@ -8,6 +8,10 @@ using namespace std;
 void setupLogger()
 {
   using namespace el;
+  el::Loggers::addFlag(LoggingFlag::LogDetailedCrashReason);
+  el::Loggers::addFlag(LoggingFlag::ColoredTerminalOutput);
+  if (!el::Loggers::hasFlag(LoggingFlag::LogDetailedCrashReason)) exit(-1);
+  if (!el::Loggers::hasFlag(LoggingFlag::ColoredTerminalOutput)) exit(-1);
   Configurations defaultConf;
   defaultConf.setToDefault();
   defaultConf.set(Level::Global, ConfigurationType::Enabled, "true");
