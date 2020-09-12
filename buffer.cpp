@@ -184,6 +184,26 @@ buffer_chain& buffer_chain::operator= (const buffer_chain& other)
   return *this;
 }
 
+buffer_chain& buffer_chain::operator= (buffer_chain&& other)
+{
+  if (this == &other) return *this;
+  if (buffer_ != nullptr) free(buffer_);
+  capacity_ = other.capacity_;
+  buffer_ = other.buffer_;
+  next_ = other.next_;
+  off_ = other.off_;
+  parent_ = other.parent_;
+  misalign_ = other.misalign_;
+
+  other.buffer_ = nullptr;
+  other.capacity_ = 0;
+  other.off_ = 0;
+  other.next_ = nullptr;
+  other.parent_ = nullptr;
+  other.misalign_ = 0;
+  return *this;
+}
+
 uint32_t buffer_chain::append(const buffer_chain& chain)
 {
   uint32_t size = chain.size();//防止自己append给自己，先记下size

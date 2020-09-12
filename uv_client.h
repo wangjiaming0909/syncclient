@@ -35,9 +35,11 @@ public:
   int start();
   int do_write();
   //buffer provide space for wirte
-  int write(const char* d, size_t size, bool flush);
+  //size_hint means how mucn memory should alloc for next flush operation
+  //size_hint is only a hint, if the size is not enough, write will realloc enough memory
+  int write(const char* d, size_t size, bool flush, uint32_t size_hint = 0);
   template <typename T>
-  int write(const T& d, bool flush);
+  int write(const T& d, bool flush, uint32_t size_hint = 0);
 
   uv_loop_t* get_loop() { return uv_default_loop();}
   void close_loop();
@@ -107,6 +109,7 @@ protected:
   uv_timer_t* reconnect_timer_ = nullptr;
   reactor::buffer my_write_buf_;
   reactor::buffer my_read_buf_;
+  reactor::buffer_chain cur_write_buffer_chain_;
   struct sockaddr_in server_addr_;
   std::string server_addr_str_;
   int server_port_;
@@ -125,7 +128,7 @@ protected:
 };
 
 template <typename T>
-int UVClient::write(const T& d, bool flush)
+int UVClient::write(const T& d, bool flush, uint32_t size_hint)
 {
   if (is_closed_) {
     LOG(ERROR) << "can't write now tcp is closed...";
@@ -135,7 +138,14 @@ int UVClient::write(const T& d, bool flush)
     LOG(WARNING) << "writing too much please wait...";
     return 0;
   }
-  auto ret = my_write_buf_.append(d);
+  using namespace reactor;
+  //using chain.size() instead of capacity cause cur chain could have had data already
+  if (cur_write_buffer_chain_.size() < size_hint) {
+    auto chain = buffer_chain(nullptr, size_hint);
+    cur_write_buffer_chain_ = std::move(chain);
+  }
+  auto ret = cur_write_buffer_chain_.append(d);
+  //auto ret = my_write_buf_.append(d);
   if (flush) {
     return do_write();
   }

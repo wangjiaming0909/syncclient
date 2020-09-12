@@ -128,11 +128,14 @@ int UVClient::do_write()
     if ((ret = uv_write(write_req_, (uv_stream_t*)tcp_, &write_buf_, 1, after_write_cb))) {
       close_tcp();
     }
+  } else {
+    LOG(WARNING) << "init write req error...";
+    ret = -1;
   }
   return ret;
 }
 
-int UVClient::write(const char* d, size_t size, bool flush)
+int UVClient::write(const char* d, size_t size, bool flush, uint32_t size_hint)
 {
   //LOG(DEBUG) << "UVClient write";
   if (is_closed_) {
@@ -143,7 +146,14 @@ int UVClient::write(const char* d, size_t size, bool flush)
     LOG(WARNING) << "writing too much please wait...";
     return 0;
   }
-  auto ret = my_write_buf_.append((const void*)d, size);
+
+  using namespace reactor;
+  if (cur_write_buffer_chain_.size() < size_hint) {
+    auto chain = buffer_chain(nullptr, size_hint);
+    cur_write_buffer_chain_ = std::move(chain);
+  }
+  auto ret = cur_write_buffer_chain_.append(d);
+  //auto ret = my_write_buf_.append((const void*)d, size);
   if ( ret < 0) {
     LOG(ERROR) << "UVClient::write error";
     return -1;
@@ -350,10 +360,17 @@ int UVClient::on_connect(uv_connect_t* req, int status)
 
 int UVClient::after_write(uv_write_t* req, int status)
 {
+  LOG(DEBUG) << "after write status: " << status;
+  if (status < 0) {
+    LOG(ERROR) << "writing error status: " << status << strerror(errno);
+  }
   my_write_buf_.drain(write_buf_.len);
   do_after_write(req, status);
   if (my_write_buf_.total_len() > 0) {
-    do_write();
+    if (do_write() < 0) {
+      LOG(ERROR) << "do write error: " << strerror(errno);
+      return -1;
+    }
   }
   return 0;
 }

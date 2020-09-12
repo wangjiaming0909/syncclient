@@ -85,6 +85,7 @@ public:
     //* note that if(this->capacity_ > other.capacity_),
     //* this function only would expand the capacity_ won't shrink
     buffer_chain& operator= (const buffer_chain& other);
+    buffer_chain& operator= (buffer_chain&& other);
     int set_offset(uint32_t offset);
     uint32_t get_offset() const {return off_;}
     uint32_t size() const { return off_ - misalign_; }
