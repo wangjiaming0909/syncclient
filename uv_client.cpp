@@ -142,17 +142,18 @@ int UVClient::write(const char* d, size_t size, bool flush, uint32_t size_hint)
     LOG(ERROR) << "can't write now tcp is closed...";
     return -1;
   }
-  if (my_write_buf_.total_len() > 1024 * 1024 * 10) {
+  if (check_is_writing_too_much()) {
     LOG(WARNING) << "writing too much please wait...";
     return 0;
   }
 
   using namespace reactor;
-  if (cur_write_buffer_chain_.size() < size_hint) {
+  if (cur_write_buffer_chain_.chain_free_space() < size_hint) {
     auto chain = buffer_chain(nullptr, size_hint);
+    chain = cur_write_buffer_chain_;
     cur_write_buffer_chain_ = std::move(chain);
   }
-  auto ret = cur_write_buffer_chain_.append(d);
+  auto ret = cur_write_buffer_chain_.append(d, size);
   //auto ret = my_write_buf_.append((const void*)d, size);
   if ( ret < 0) {
     LOG(ERROR) << "UVClient::write error";
@@ -290,10 +291,11 @@ size_t UVClient::init_write_req()
   write_req_ = new uv_write_t();
   memset(&write_buf_, 0, sizeof(write_buf_));
   do_init_write_req();
-  if (my_write_buf_.total_len() > 0) {
-    auto p = my_write_buf_.pullup(my_write_buf_.total_len() > 4096 ? 4096 : my_write_buf_.total_len());
-    //LOG(DEBUG) << "init_write_req len: " << my_write_buf_.first_chain_length();
-    write_buf_ = uv_buf_init(p, my_write_buf_.first_chain_length());
+  if (my_write_buf_.total_len() > 0 || cur_write_buffer_chain_.size() > 0) {
+    const char* p = (const char*)cur_write_buffer_chain_.get_buffer();
+    write_buf_ = uv_buf_init(const_cast<char*>(p), cur_write_buffer_chain_.size());
+    my_write_buf_.append(std::move(cur_write_buffer_chain_));
+    LOG(DEBUG) << "after init_write_req write buf chain size: " << my_write_buf_.chain_number();
   }
   return write_buf_.len;
 }
@@ -364,14 +366,17 @@ int UVClient::after_write(uv_write_t* req, int status)
   if (status < 0) {
     LOG(ERROR) << "writing error status: " << status << strerror(errno);
   }
-  my_write_buf_.drain(write_buf_.len);
+  my_write_buf_.drain(my_write_buf_.get_chains().front().size());
+  LOG(DEBUG) << "after write write buf chain size: " << my_write_buf_.chain_number();
   do_after_write(req, status);
+  /*
   if (my_write_buf_.total_len() > 0) {
     if (do_write() < 0) {
       LOG(ERROR) << "do write error: " << strerror(errno);
       return -1;
     }
   }
+  */
   return 0;
 }
 

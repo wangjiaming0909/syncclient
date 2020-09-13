@@ -7,7 +7,7 @@
 
 namespace sync_client
 {
-uint64_t SyncClient::DEFAULT_TIMER_INTERVAL = 2000;
+uint64_t SyncClient::DEFAULT_TIMER_INTERVAL = 1000;
 
 SyncClient::SyncClient()
   : UVClient()
@@ -49,10 +49,10 @@ int SyncClient::ping()
   }
   //TODO size type long?
   int ret = 0;
-  for(int i = 0; i < 0; i++) {
+  for(int i = 0; i < 1; i++) {
     LOG(INFO) << "pinging...";
-    if ((ret = write(client_hello_package_size_, false)) > 0)
-      write(client_hello_package_, client_hello_package_size_, true);
+    if ((ret = write(client_hello_package_size_, false, client_hello_package_size_ + 64)) > 0)
+      write(client_hello_package_, client_hello_package_size_, true, 0);
     else if (ret < 0) return -1;
     else if (ret == 0){
       return 0;
@@ -65,6 +65,13 @@ int SyncClient::do_after_write(uv_write_t* req, int status)
 {
   (void)req;
   (void)status;
+  if (is_wrote_too_much_ && !check_is_writing_too_much()) {
+    is_wrote_too_much_ = false;
+    if (fses_.size() > 0) {
+      auto it = fses_.erase(fses_.begin());
+      file_cb(*it, UV_FS_READ);
+    }
+  }
   return 0;
 }
 
@@ -223,6 +230,8 @@ int SyncClient::file_cb(uv_fs_t* fs, uv_fs_type fs_type)
           file->close();
           break;
         } else if (ret == 0) {
+          is_wrote_too_much_ = true;
+          fses_.insert(fs);
           break;
         }
         it_info->second.sent += bytes_read;
@@ -274,10 +283,10 @@ int SyncClient::send_deposite_file_message(const char* file_name, uint64_t len, 
     int64_t size = package->ByteSizeLong();
     package->SerializeToArray(mes_, size);
     LOG(DEBUG) << "build package size: " << size;
-    auto ret = write(size, false);
+    auto ret = write(size, false, size + 64);
     //if we got error when writing, should we clear all data in this buffer
     //the only reason that this could happen will be the connection error
-    if (ret <= 0 || (ret = write(mes_, size, true)) < 0) {
+    if (ret <= 0 || (ret = write(mes_, size, true, 0)) < 0) {
       LOG(WARNING) << "writing file: " << file_name << " from: " << from << " to: " << tmp_to << " return 0 or -1";
       return ret;
     }

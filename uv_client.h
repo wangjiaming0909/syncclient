@@ -73,6 +73,9 @@ protected:
   //if return 0 means that no data to write
   size_t init_write_req();
   int fs_event_check_cb(uv_check_t* check);
+  bool check_is_writing_too_much() {
+    return my_write_buf_.total_len() > 1024 * 1024 * 10;
+  }
 
 protected:
   virtual size_t do_init_write_req() = 0;
@@ -134,14 +137,14 @@ int UVClient::write(const T& d, bool flush, uint32_t size_hint)
     LOG(ERROR) << "can't write now tcp is closed...";
     return -1;
   }
-  if (my_write_buf_.total_len() > 1024 * 1024 * 10) {
+  if (check_is_writing_too_much()) {
     LOG(WARNING) << "writing too much please wait...";
     return 0;
   }
   using namespace reactor;
-  //using chain.size() instead of capacity cause cur chain could have had data already
-  if (cur_write_buffer_chain_.size() < size_hint) {
+  if (cur_write_buffer_chain_.chain_free_space() < size_hint) {
     auto chain = buffer_chain(nullptr, size_hint);
+    chain = cur_write_buffer_chain_;
     cur_write_buffer_chain_ = std::move(chain);
   }
   auto ret = cur_write_buffer_chain_.append(d);
