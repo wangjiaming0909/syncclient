@@ -233,6 +233,7 @@ int SyncClient::file_cb(uv_fs_t* fs, uv_fs_type fs_type)
         } else if (ret == 0) {
           is_wrote_too_much_ = true;
           fses_.insert(fs);
+          LOG(DEBUG) << "inserting fs: " << file->file_name() << " into fses after insert fses size: " <<fses_.size();
           break;
         }
         it_info->second.sent += bytes_read;
@@ -296,7 +297,7 @@ int SyncClient::send_deposite_file_message(const char* file_name, uint64_t len, 
     //if we got error when writing, should we clear all data in this buffer
     //the only reason that this could happen will be the connection error
     if (ret <= 0 || (ret = write(mes_, size, true, 0)) < 0) {
-      LOG(WARNING) << "writing file: " << file_name << " from: " << from << " to: " << tmp_to << " return 0 or -1";
+      //LOG(WARNING) << "writing file: " << file_name << " from: " << from << " to: " << tmp_to << " return 0 or -1";
       return ret;
     }
     data.drain(len_to_pullup);
