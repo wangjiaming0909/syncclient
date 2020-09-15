@@ -18,7 +18,7 @@ SyncClient::SyncClient()
 }
 SyncClient::~SyncClient()
 {
-  delete client_hello_package_;
+  free(client_hello_package_);
   client_hello_package_ = nullptr;
   free(mes_);
   for(auto& p : fs_files_map_)
@@ -68,8 +68,9 @@ int SyncClient::do_after_write(uv_write_t* req, int status)
   if (is_wrote_too_much_ && !check_is_writing_too_much()) {
     is_wrote_too_much_ = false;
     if (fses_.size() > 0) {
-      auto it = fses_.erase(fses_.begin());
-      file_cb(*it, UV_FS_READ);
+      auto* fs = *fses_.begin();
+      fses_.erase(fses_.begin());
+      file_cb(fs, UV_FS_READ);
     }
   }
   return 0;
@@ -237,7 +238,9 @@ int SyncClient::file_cb(uv_fs_t* fs, uv_fs_type fs_type)
         it_info->second.sent += bytes_read;
         LOG(DEBUG) << "sent: " << it_info->second.sent << " target: " << it_info->second.target << " total: " << it_info->second.total_len;
         if (it_info->second.sent < it_info->second.total_len) {
+
         } else {
+          LOG(INFO) << "sending file: " << file->file_name() << " finished";
           file->close();
           break;
         }
@@ -257,6 +260,7 @@ int SyncClient::file_cb(uv_fs_t* fs, uv_fs_type fs_type)
     case UV_FS_CLOSE:
       {
         LOG(DEBUG) << "on fs close " << file->file_name();
+        LOG(INFO) << "closing file: " << file->file_name();
         sync_entry_map_.erase(it_info);
         auto it = fs_files_map_.find(file->file_name());
         delete it->second;
@@ -291,7 +295,7 @@ int SyncClient::send_deposite_file_message(const char* file_name, uint64_t len, 
       return ret;
     }
     data.drain(len_to_pullup);
-    LOG(INFO) << "writing file: " << file_name << " from: " << from << " to: " << tmp_to << " succeed " << len_to_pullup;
+    LOG(DEBUG) << "writing file: " << file_name << " from: " << from << " to: " << tmp_to << " succeed " << len_to_pullup;
   }
   assert(data.total_len() == 0);
   return 1;

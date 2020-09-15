@@ -94,6 +94,7 @@ UVClient::~UVClient()
   for (auto it = filenames.begin(); it != filenames.end(); ++it) {
     stop_fs_monitoring(*it);
   }
+  delete fs_event_check_;
 }
 
 int UVClient::init(const char* server_addr, int port)
@@ -369,6 +370,8 @@ int UVClient::after_write(uv_write_t* req, int status)
   my_write_buf_.drain(my_write_buf_.get_chains().front().size());
   LOG(DEBUG) << "after write write buf chain size: " << my_write_buf_.chain_number();
   do_after_write(req, status);
+  delete req;
+  write_req_ = nullptr;
   /*
   if (my_write_buf_.total_len() > 0) {
     if (do_write() < 0) {

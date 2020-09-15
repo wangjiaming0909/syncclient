@@ -13,10 +13,12 @@ FSFile::FSFile(uv_loop_t* loop, const char* file_name, Callback cb)
 
 FSFile::~FSFile()
 {
+  uv_fs_req_cleanup(fs_);
   delete fs_;
 }
 int FSFile::open(int flags, int mode)
 {
+  uv_fs_req_cleanup(fs_);
   auto h = uv_fs_open(loop_, fs_, file_name_.c_str(), flags, mode, fs_callback);
   LOG(DEBUG) << "open file: " << file_name_;
   if (h < 0) {
@@ -26,6 +28,7 @@ int FSFile::open(int flags, int mode)
 }
 int FSFile::close()
 {
+  uv_fs_req_cleanup(fs_);
   auto ret = uv_fs_close(loop_, fs_, handle_, fs_callback);
   if (ret < 0) {
     LOG(ERROR) << "close file " << file_name_ << " failed";
@@ -34,6 +37,7 @@ int FSFile::close()
 }
 int FSFile::read(uint32_t size, int64_t offset)
 {
+  uv_fs_req_cleanup(fs_);
   uv_read_buf_.base = (char*)::calloc(size, 1);
   uv_read_buf_.len = size;
   auto ret = uv_fs_read(loop_, fs_, handle_, &uv_read_buf_, 1, offset, fs_callback);
@@ -49,6 +53,7 @@ int FSFile::write()
 
 int FSFile::stat()
 {
+  uv_fs_req_cleanup(fs_);
   auto ret = uv_fs_stat(loop_, fs_, file_name_.c_str(), fs_callback);
   if (ret < 0) {
     LOG(ERROR) << "fs stat file: " << file_name_ << " failed";
