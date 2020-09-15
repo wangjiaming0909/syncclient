@@ -31,11 +31,13 @@ struct SyncEntryInfo {
     sent = 0;
     target = 0;
     state = SyncEntryState::IDLE;
+    percent = 0;
   }
   const std::string* filename;
   uint64_t total_len;
   uint64_t sent;
   uint64_t target;
+  int percent;
   SyncEntryState state;
 };
 

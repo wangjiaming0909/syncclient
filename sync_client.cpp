@@ -49,7 +49,7 @@ int SyncClient::ping()
   }
   //TODO size type long?
   int ret = 0;
-  for(int i = 0; i < 1; i++) {
+  for(int i = 0; i < 0; i++) {
     LOG(INFO) << "pinging...";
     if ((ret = write(client_hello_package_size_, false, client_hello_package_size_ + 64)) > 0)
       write(client_hello_package_, client_hello_package_size_, true, 0);
@@ -66,10 +66,10 @@ int SyncClient::do_after_write(uv_write_t* req, int status)
   (void)req;
   (void)status;
   if (is_wrote_too_much_ && !check_is_writing_too_much()) {
-    is_wrote_too_much_ = false;
     if (fses_.size() > 0) {
       auto* fs = *fses_.begin();
       fses_.erase(fses_.begin());
+      if (fses_.empty()) is_wrote_too_much_ = false;
       file_cb(fs, UV_FS_READ);
     }
   }
@@ -238,7 +238,12 @@ int SyncClient::file_cb(uv_fs_t* fs, uv_fs_type fs_type)
         it_info->second.sent += bytes_read;
         LOG(DEBUG) << "sent: " << it_info->second.sent << " target: " << it_info->second.target << " total: " << it_info->second.total_len;
         if (it_info->second.sent < it_info->second.total_len) {
-
+          float percent = (it_info->second.sent + 0.0001) / (it_info->second.total_len + 0.0001);
+          int a = percent * 10;
+          if (a != it_info->second.percent) {
+            it_info->second.percent = a;
+            LOG(INFO) << "sending file: " << file->file_name() << ": " << it_info->second.percent * 10 << "%";
+          }
         } else {
           LOG(INFO) << "sending file: " << file->file_name() << " finished";
           file->close();
