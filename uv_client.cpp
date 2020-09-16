@@ -144,7 +144,7 @@ int UVClient::write(const char* d, size_t size, bool flush, uint32_t size_hint)
     return -1;
   }
   if (check_is_writing_too_much()) {
-    LOG(WARNING) << "writing too much please wait...";
+    //LOG(WARNING) << "writing too much please wait...";
     return 0;
   }
 

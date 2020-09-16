@@ -29,7 +29,7 @@ int SyncClient::do_on_connect(uv_connect_t* req, int status)
 {
   (void)req;
   (void)status;
-  LOG(DEBUG) << "SyncClient do_on_connect";
+  LOG(INFO) << "SyncClient do_on_connect";
   if (is_ping_failed_) {
     return 0;
   }
